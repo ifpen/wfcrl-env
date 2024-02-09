@@ -1,0 +1,5 @@
+example/bin/*
+example/5MW_Baseline/*
+*.sum
+*.ech
+*.out
