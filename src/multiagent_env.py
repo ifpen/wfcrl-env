@@ -1,116 +1,105 @@
-import json
-from sre_constants import error
-from typing import Iterable, Iterator, List, Optional, Tuple, Union
+import functools
+from typing import Dict
 
-import gym
-from gym import spaces
 import numpy as np
-from pathlib import Path
+from gymnasium import spaces
 from pettingzoo import AECEnv
-from pettingzoo import ParallelEnv
 from pettingzoo.utils import agent_selector
-from pettingzoo.utils import wrappers
 
-from envs import BaseFarmEnv
-from interface import BaseInterface
-from qlearning_utils import less_than_180, is_within_bounds
-
-
-class DecentralizedFarmEnv(BaseFarmEnv, AECEnv):
-
-    metadata = {"render_modes": ["human"], "name": "DecentralizedFarmEnv"}
+from src.interface import BaseInterface
+from src.mdp import WindFarmMDP
+from src.rewards import RewardShaper
 
 
-    def __init__(self, 
-        config: Path,
+class MAWindFarmEnv(AECEnv):
+    def __init__(
+        self,
         interface: BaseInterface,
-        state_lb: np.ndarray,
-        state_ub: np.ndarray,
-        actions: list,
-        yaw_init: int = 0,
-        velocity: float = 8.0,
-        delta_yaw: float = 1.0,
-        reward_tol: float = 0.0005,
-        continuous_control: bool = False,
-        action_bounds: tuple = (-1,1),
-        reward_bounds: tuple = (-1,1),
-        yaw_bound: float = 40.0,
-        sync_turbines: bool = True,
-        interface_kwargs = None
+        num_turbines: int,
+        controls: dict,
+        continuous_control: bool = True,
+        interface_kwargs: Dict = None,
+        reward_shaper: RewardShaper = None,
     ):
-        """
-            sync_turbines: all turbines act in the environment at the same time !
-        """
-        super(DecentralizedFarmEnv, self).__init__(
-            config, interface, yaw_init, velocity, delta_yaw, reward_tol, 
-                reward_bounds, yaw_bound, interface_kwargs
+        # TODO: make start_state
+        start_state = {
+            "wind_measurements": np.array([8, 0]),
+            "yaw": np.array([0, 0, 0]),
+            "pitch": np.array([0, 0, 0]),
+            "torque": np.array([0, 0, 0]),
+        }
+
+        self.mdp = WindFarmMDP(
+            interface=interface,
+            num_turbines=num_turbines,
+            controls=controls,
+            start_state=start_state,
+            continuous_control=continuous_control,
+            interface_kwargs=interface_kwargs,
         )
-        
-        self.possible_agents = ["turbine_" + str(r+1) for r in range(self.num_turbines)]
+
+        self.continuous_control = continuous_control
+        self._state = self.mdp.start_state
+        self.num_turbines = self.mdp.num_turbines
+        if reward_shaper is not None:
+            self.reward_shaper = reward_shaper
+        else:
+            self.reward_shaper = lambda x: x
+
+        # Init AEC properties
+        self.possible_agents = [
+            "turbine_" + str(r + 1) for r in range(self.num_turbines)
+        ]
         self.agent_name_mapping = dict(
             zip(self.possible_agents, list(range(len(self.possible_agents))))
         )
-        self._continuous_control = continuous_control
-        self._state_lb = state_lb
-        self._state_ub = state_ub
-        self._actions = actions
-        self._action_bounds = action_bounds
-        self._action_history = []
-        self._sync_turbines = sync_turbines
+        self._build_agent_spaces()
 
-        if continuous_control:
-            self._action_spaces = {
-                agent: spaces.Box(low=np.array([action_bounds[0]]), 
-                                  high=np.array([action_bounds[1]]),
-                                  shape=(1,), dtype=np.float32)
-                for agent in self.possible_agents
-            }
-        else:
-            self._action_space_start = -1
-            self._action_spaces = {
-                agent: spaces.Discrete(len(actions))
-                for agent in self.possible_agents
-            }
+    @functools.lru_cache(maxsize=None)
+    def observation_space(self, agent):
+        return self._obs_spaces[agent]
 
-        self._obs_shape = state_ub.shape[0]
-        self._observation_spaces = {
-            agent: spaces.Box(low=state_lb, high=state_ub,
-                    shape=(self._obs_shape,), dtype=np.float32)  
-            for agent in self.possible_agents
+    @functools.lru_cache(maxsize=None)
+    def action_space(self, agent):
+        return self._action_spaces[agent]
+
+    def state(self):
+        return self._state
+
+    def _build_agent_spaces(self):
+        # Retrieve observation and action spaces for all agents
+        self._obs_spaces = {}
+        self._action_spaces = {}
+        for i, agent in enumerate(self.possible_agents):
+            self._obs_spaces[agent] = {
+                key: (
+                    space
+                    if key == "wind_measurements"
+                    else spaces.Box(space.low[i], space.high[i])
+                )
+                for key, space in self.mdp.state_space.items()
+            }
+            if self.continuous_control:
+                self._action_spaces[agent] = {
+                    key: spaces.Box(space.low[i], space.high[i])
+                    for key, space in self.mdp.action_space.items()
+                }
+            else:
+                self._action_spaces[agent] = {
+                    key: space[i] for key, space in self.mdp.action_space.items()
+                }
+
+    def _join_actions(self, agent_actions):
+        joint_action = {
+            control: np.zeros(self.num_turbines, dtype=np.float32)
+            for control in self.mdp.controls
         }
-        self._get_action_space = self._build_action_space_method()
-
-        # initialize state
-        self._state = np.zeros((self.num_turbines,self._obs_shape))
-        self._update_state()
-
-    # @functools.lru_cache(maxsize=None)
-    @property
-    def observation_space(self):
-        return spaces.Box(low=self._state_lb, high=self._state_ub,
-                    shape=(self._obs_shape,), dtype=np.float32)
-
-    def _build_action_space_method(self):
-        if self._continuous_control:
-            def action_space_fn(agent):
-                return spaces.Box(low=np.array([self._action_bounds[0]]), 
-                                  high=np.array([self._action_bounds[1]]),
-                                  shape=(1,), dtype=np.float32)
-        else:
-            def action_space_fn(agent):
-                return spaces.Discrete(len(self._actions))     
-        return action_space_fn
-
-    # @functools.lru_cache(maxsize=None)
-    @property
-    def action_space(self):
-        return self._get_action_space(None)
-
-    def _update_state(self):
-        yaws = self.yaws
-        self._state[:,0] = yaws
-        self._state[:, 1] = self.direction
-        self._state[:, -1] = self.velocity
+        for j, (agent, action) in enumerate(agent_actions.items()):
+            for control in action:
+                joint_action[control][j] = action[control][:]
+        # TODO: add proper handling of logging
+        # (debug level) print(f"Created joint action {joint_action}")
+        return joint_action
 
     def observe(self, agent):
         """
@@ -118,12 +107,17 @@ class DecentralizedFarmEnv(BaseFarmEnv, AECEnv):
         should return a sane observation (though not necessarily the most up to date possible)
         at any time after reset() is called.
         """
-        # observation of one agent is the previous state of the other
-        return  self._state[self.agent_name_mapping[agent]].copy()
+        global_state = self.state()
+        agent_state = {}
+        agent_state["wind_measurements"] = global_state["wind_measurements"]
+        for key, partial_state in global_state.items():
+            if key != "wind_measurements":
+                agent_state[key] = partial_state[self.agent_name_mapping[agent]]
+        return agent_state
 
     def reset(self, seed=None):
         """
-        Reset needs to initialize the following attributes
+        Reset initializes the following attributes
         - agents
         - rewards
         - _cumulative_rewards
@@ -132,33 +126,23 @@ class DecentralizedFarmEnv(BaseFarmEnv, AECEnv):
         - agent_selection
         And must set up the environment so that render(), step(), and observe()
         can be called without issues.
-
-        Here it sets up the state dictionary which is used by step() and the observations dictionary which is used by step() and observe()
         """
-       
-        self.reset_farm() 
-        self._update_state()
 
         self.agents = self.possible_agents[:]
         self._num_steps = {agent: 0 for agent in self.agents}
         self.rewards = {agent: 0 for agent in self.agents}
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
-        self.dones = {agent: False for agent in self.agents}
+        self.terminations = {agent: False for agent in self.agents}
+        self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self.actions = {agent: None for agent in self.agents}
-        self.observations = {agent:  self._state[self.agent_name_mapping[agent]].copy() for agent in self.agents}
+        self.observations = {agent: self.observe(agent) for agent in self.agents}
         self.num_moves = 0
-
-        self.productions = {agent:  self._turbine_prods[-1][idx] for idx, agent in enumerate(self.agents)}
-
         """
-        Our agent_selector utility allows easy cyclic stepping through the agents list.
+        Init agent selector
         """
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
-
-    def get_violation_conter(self):
-        return self._bound_violation_counter.copy()
 
     def step(self, action):
         """
@@ -173,74 +157,31 @@ class DecentralizedFarmEnv(BaseFarmEnv, AECEnv):
         """
 
         agent = self.agent_selection
-        agent_id = self.agent_name_mapping[agent]
-
-        low = self.action_space.low[0]
-        high = self.action_space.high[0]
-        action = np.clip(
-            action, 
-            low,
-            high
-        )
-
-        # get relative bounds
-        greedy_yaw = self.sim_interface.get_greedy_yaw()
-        relative_lower_yaw = less_than_180(greedy_yaw - self._yaw_bound)
-        relative_upper_yaw = less_than_180(greedy_yaw + self._yaw_bound)
-        relative_bounds = [relative_lower_yaw, relative_upper_yaw]
-        within_relative_bounds, distances = is_within_bounds(self.yaws[agent_id], relative_lower_yaw, relative_upper_yaw)
-
-        # The old yaw is always within the absolute bounds, but it may not be within
-        # the relative bounds as the wind keeps changing
-
-        if not within_relative_bounds:
-            green_yaw = relative_bounds[np.abs(distances).argmin()]
-            self._bound_violation_counter[agent_id] += 1 
-
         self._num_steps[agent] += 1
-        old_yaws = self.yaws
-        new_yaws = old_yaws.copy()
-        if self._continuous_control:
-            new_yaw = old_yaws[agent_id] + action
-        else:
-            new_yaw = old_yaws[agent_id] + self._delta_yaw * (action + self._action_space_start)
-        new_yaw = np.clip(
-            new_yaw, 
-            self.observation_space.low[0],
-            self.observation_space.high[0]
-        )
-        new_yaws[agent_id] = new_yaw
 
-        self.sim_interface.set_yaw_angles(new_yaws, sync=not self._sync_turbines)
-        self._update_state()
-
-        # the agent which stepped last had its _cumulative_rewards accounted for
-        # (because it was returned by last()), so the _cumulative_rewards for this
-        # agent should start again at 0
+        # restart reward accumulation
         self._cumulative_rewards[agent] = 0
         # stores action of current agent
         self.actions[self.agent_selection] = action
+        self.terminations[agent] = False
+        self.truncations[agent] = False
 
-        # collect reward if it is the last agent to act
+        # collect reward when all agents have taken an action
         if self._agent_selector.is_last():
-            # rewards for all agents are placed in the .rewards dictionary
-            if self._sync_turbines:
-                self.sim_interface.set_yaw_angles(self.yaws, sync=True)
-            self._prods.append(self.sim_interface.get_farm_power())
-            self._turbine_prods.append(self.evaluate_power())
-            self.productions = {agent:  self._turbine_prods[-1][idx] for idx, agent in enumerate(self.agents)}
-            self._yaws.append(new_yaws)
-            self._action_history.append(list(self.actions.values()))
-            reward = np.array(self._get_reward())
+            next_state, powers = self.mdp.take_action(
+                self._state, self._join_actions(self.actions)
+            )
+            reward = np.array([self.reward_shaper(powers.sum())])
+            self._state = next_state
             for agent in self.agents:
-                # same reward for everybody
+                # cooperative env: same reward for everybody
+                # might change later to account for fatigue
                 self.rewards[agent] = reward
-                self.observations[agent] = self._state[self.agent_name_mapping[agent]].copy()
-                # self.infos[agent] = {"greedy_yaw": greedy_yaw}
-            self.sim_interface.next_wind()
+                self.observations[agent] = self.observe(agent)
+                self.infos[agent] = {"power": powers[self.agent_name_mapping[agent]]}
             self.num_moves += 1
         else:
-            # no rewards are allocated until both players give an action
+            # no reward allocated until all players take an action
             self._clear_rewards()
 
         # selects the next agent.
