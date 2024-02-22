@@ -20,22 +20,15 @@ class MAWindFarmEnv(AECEnv):
         continuous_control: bool = True,
         interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = None,
+        start_iter: int = 0,
     ):
-        # TODO: make start_state
-        start_state = {
-            "wind_measurements": np.array([8, 0]),
-            "yaw": np.array([0, 0, 0]),
-            "pitch": np.array([0, 0, 0]),
-            "torque": np.array([0, 0, 0]),
-        }
-
         self.mdp = WindFarmMDP(
             interface=interface,
             num_turbines=num_turbines,
             controls=controls,
-            start_state=start_state,
             continuous_control=continuous_control,
             interface_kwargs=interface_kwargs,
+            start_iter=start_iter,
         )
 
         self.continuous_control = continuous_control
@@ -159,6 +152,14 @@ class MAWindFarmEnv(AECEnv):
         agent = self.agent_selection
         self._num_steps[agent] += 1
 
+        # TODO: allow for different control for each agent
+        # For now, every local action must send a command for ALL controls
+        if any([not (control in action) for control in self.mdp.controls]):
+            raise ValueError(
+                f"Action {action} for agent {agent} is incomplete."
+                f" List of needed controls: {self.mdp.controls.keys()}"
+            )
+
         # restart reward accumulation
         self._cumulative_rewards[agent] = 0
         # stores action of current agent
@@ -168,7 +169,7 @@ class MAWindFarmEnv(AECEnv):
 
         # collect reward when all agents have taken an action
         if self._agent_selector.is_last():
-            next_state, powers = self.mdp.take_action(
+            next_state, powers, loads = self.mdp.take_action(
                 self._state, self._join_actions(self.actions)
             )
             reward = np.array([self.reward_shaper(powers.sum())])
@@ -178,7 +179,10 @@ class MAWindFarmEnv(AECEnv):
                 # might change later to account for fatigue
                 self.rewards[agent] = reward
                 self.observations[agent] = self.observe(agent)
-                self.infos[agent] = {"power": powers[self.agent_name_mapping[agent]]}
+                self.infos[agent] = {
+                    "power": powers[self.agent_name_mapping[agent]],
+                    "load": loads[self.agent_name_mapping[agent]],
+                }
             self.num_moves += 1
         else:
             # no reward allocated until all players take an action

@@ -10,5 +10,6 @@ Cy = [0.0, 0.0, 0.0]
 
 dt = 3
 buffer_window = 600
+t_init = 100
 
-interface_kwargs = {"measurement_window": int(buffer_window/dt)}
+interface_kwargs = {"measurement_window": int(buffer_window / dt)}

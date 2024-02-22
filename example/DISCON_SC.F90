@@ -109,15 +109,13 @@ CHARACTER(SIZE(avcMSG)-1)    :: ErrMsg                                          
 REAL(4)                      :: YawRef
 REAL(4)                      :: PitchRef
 REAL(4)                      :: TorqueRef
-REAL(4)                      :: Yaw_angle
-REAL(4)                      :: Yaw_angle_com
+REAL(4)                      :: YawAngle
+REAL(4)                      :: Blade1PitchAngle
 REAL(4)                      :: YawError
 REAL(4)                      :: YawRate
-REAL(4)                      :: x
-
-!OPEN  (456, FILE='debug2.txt', STATUS='old',position="append")
-!WRITE (456,*) 'Entered Call to DISCON'
-!close (456)
+LOGICAL(1)                   :: YawExternalCommand = .FALSE.              ! a command to switch to external rather than native FAST.Farm yaw control
+LOGICAL(1)                   :: PitchExternalCommand = .FALSE.                ! a command to switch to external rather native FAST.Farm pitch control
+LOGICAL(1)                   :: TorqueExternalCommand = .FALSE.               ! a command to switch to external rather native FAST.Farm torque control
 
    ! Load variables from calling program (See Appendix A of Bladed User's Guide):
 
@@ -128,9 +126,6 @@ NumBl        = NINT( avrSWAP(61) )
 BlPitch  (1) =       MIN( MAX( avrSWAP( 4), PC_MinPit ), PC_MaxPit )    ! assume that blade pitch can't exceed limits
 BlPitch  (2) =       MIN( MAX( avrSWAP(33), PC_MinPit ), PC_MaxPit )    ! assume that blade pitch can't exceed limits
 BlPitch  (3) =       MIN( MAX( avrSWAP(34), PC_MinPit ), PC_MaxPit )    ! assume that blade pitch can't exceed limits
-!BlPitch  (1) =       avrSWAP( 4)
-!BlPitch  (2) =       avrSWAP(33)
-!BlPitch  (3) =       avrSWAP(34)
 GenSpeed     =       avrSWAP(20)
 HorWindV     =       avrSWAP(27)
 Time         =       avrSWAP( 2)
@@ -154,10 +149,6 @@ aviFAIL      = 0
 
    ! Read any External Controller Parameters specified in the User Interface
    !   and initialize variables:
-!OPEN  (456, FILE='debug2.txt', STATUS='old',position="append")
-!WRITE (456,*) 'Entering IF iStatus'
-!!WRITE (456,*) 'iStatus = ' // Num2LStr(iStatus)
-!close (456)
 
 IF ( iStatus == 0 )  THEN  ! .TRUE. if we're on the first call to the DLL
 
@@ -179,12 +170,6 @@ IF ( iStatus == 0 )  THEN  ! .TRUE. if we're on the first call to the DLL
    ELSE                          ! .TRUE. if the Region 2 torque is quadratic with speed
       VS_TrGnSp = ( VS_Slope25 - SQRT( VS_Slope25*( VS_Slope25 - 4.0*VS_Rgn2K*VS_SySp ) ) )/( 2.0*VS_Rgn2K )
    ENDIF
-
-   !OPEN  (456, FILE='debug2.txt', STATUS='old',position="append")
-   ! WRITE (456,*) 'Entered IF iStatus and determined torque control params'
-   ! !WRITE (456,*) 'aviFAIL = ' // Num2LStr(aviFAIL)
-   ! close (456)
-
 
    ! Check validity of input parameters:
 
@@ -340,7 +325,7 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    avrSWAP(41) = 0.0 ! Demanded yaw actuator torque
    avrSWAP(46) = 0.0 ! Demanded pitch rate (Collective pitch)
    avrSWAP(48) = 0.0 ! Demanded nacelle yaw rate
-   avrSWAP(48) = from_SC(1) !Set demanded nacelle yaw rate from supercontroller
+   avrSWAP(48) = 0.0 !Set default demanded nacelle yaw rate
    avrSWAP(65) = 0.0 ! Number of variables returned for logging
    avrSWAP(72) = 0.0 ! Generator start-up resistance
    avrSWAP(79) = 0.0 ! Request for loads: 0=none
@@ -349,29 +334,37 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
 
     ! --------- Yaw controller P
-
-    YawRef    = from_SC(1)
-    PitchRef    = from_SC(2)
-    TorqueRef    = from_SC(3)
-    !print *, "pitch control config", avrSWAP(28), "yaw control config", avrSWAP(29)
+    YawExternalCommand = from_SC(1) == 1.0
+    PitchExternalCommand = from_SC(2) == 1.0
+    TorqueExternalCommand = from_SC(3) == 1.0
+    YawRef    = from_SC(4)
+    PitchRef    = from_SC(5)
+    TorqueRef    = from_SC(6)
     !print *, "received YawRef: ", YawRef, " TorqueRef: ", TorqueRef, " PitchRef: ", PitchRef
-    Yaw_angle = avrSWAP(37)
+    YawAngle = avrSWAP(37)
     !avrSWAP(24)    =  YawRef - avrSWAP(37) !yaw error
 
+    IF (YawExternalCommand) THEN
     !avrSWAP(48) = MIN( MAX( 1*avrSWAP(24), -from_SC_Glob(1) ), from_SC_Glob(1) ) !saturation at 0.3deg/s
-    avrSWAP(48) = 1*(YawRef - Yaw_angle)!yaw rate
+        avrSWAP(48) = 1*(YawRef - YawAngle)!yaw rate
     !avrSWAP(48) = 1*(avrSWAP(24))!yaw rate
+    ENDIF
     to_SC(1) = avrSWAP(27) !hub wind speed
     to_SC(2) = avrSWAP(15) !measured electrical power
-    !print *, "measure yaw", avrSWAP(24), "nacelle angle from N", avrSWAP(37)
     to_SC(3) = avrSWAP(24) + avrSWAP(37)!(wind direction from North)  = measured yaw error: + (nacelle angle from North)
+    to_SC(4) = YawAngle   ! Send measured yaw angle to supercontroller
+    to_SC(5) = avrSWAP(5) ! Send measured Blade 1 Pitch angle to supercontroller
+    to_SC(6) = avrSWAP(23) ! Send measured generator torque to supercontroller
+    ! Send load measures
+    to_SC(7) = avrSWAP(30)
+    to_SC(8) = avrSWAP(31)
+    to_SC(9) = avrSWAP(32)
+    to_SC(10) = avrSWAP(69)
+    to_SC(11) = avrSWAP(70)
+    to_SC(12) = avrSWAP(71)
+    !print *, "sent all measures to to_SC"
 
     ! -------- End yaw controller
-
-      !Print "(f6.3)", from_SC(1)
-      !OPEN ( 12, FILE='wind.dat', STATUS='old',position="append")
-      !WRITE (12,*) from_SC(1)
-      !close (12)
 
 !=======================================================================
 
@@ -421,40 +414,44 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
    IF ( ( Time*OnePlusEps - LastTimeVS ) >= VS_DT )  THEN
 
+    IF (.not. TorqueExternalCommand) THEN
+       ! Use native FAST.Farm control
 
-   ! Compute the generator torque, which depends on which region we are in:
+       ! Compute the generator torque, which depends on which region we are in:
 
-      IF ( (   GenSpeedF >= VS_RtGnSp ) .OR. (  PitCom(1) >= VS_Rgn3MP ) )  THEN ! We are in region 3 - power is constant
-         GenTrq = VS_RtPwr/GenSpeedF
-      ELSEIF ( GenSpeedF <= VS_CtInSp )  THEN                                    ! We are in region 1 - torque is zero
-         GenTrq = 0.0
-      ELSEIF ( GenSpeedF <  VS_Rgn2Sp )  THEN                                    ! We are in region 1 1/2 - linear ramp in torque from zero to optimal
-         GenTrq = VS_Slope15*( GenSpeedF - VS_CtInSp )
-      ELSEIF ( GenSpeedF <  VS_TrGnSp )  THEN                                    ! We are in region 2 - optimal torque is proportional to the square of the generator speed
-         GenTrq = VS_Rgn2K*GenSpeedF*GenSpeedF
-      ELSE                                                                       ! We are in region 2 1/2 - simple induction generator transition region
-         GenTrq = VS_Slope25*( GenSpeedF - VS_SySp   )
-      ENDIF
+          IF ( (   GenSpeedF >= VS_RtGnSp ) .OR. (  PitCom(1) >= VS_Rgn3MP ) )  THEN ! We are in region 3 - power is constant
+             GenTrq = VS_RtPwr/GenSpeedF
+          ELSEIF ( GenSpeedF <= VS_CtInSp )  THEN                                    ! We are in region 1 - torque is zero
+             GenTrq = 0.0
+          ELSEIF ( GenSpeedF <  VS_Rgn2Sp )  THEN                                    ! We are in region 1 1/2 - linear ramp in torque from zero to optimal
+             GenTrq = VS_Slope15*( GenSpeedF - VS_CtInSp )
+          ELSEIF ( GenSpeedF <  VS_TrGnSp )  THEN                                    ! We are in region 2 - optimal torque is proportional to the square of the generator speed
+             GenTrq = VS_Rgn2K*GenSpeedF*GenSpeedF
+          ELSE                                                                       ! We are in region 2 1/2 - simple induction generator transition region
+             GenTrq = VS_Slope25*( GenSpeedF - VS_SySp   )
+          ENDIF
 
+    ELSE
+       ! Use Supercontroller command
+       GenTrq = TorqueRef
+    ENDIF
 
-   ! Saturate the commanded torque using the maximum torque limit:
+      ! Saturate the commanded torque using the maximum torque limit:
 
       GenTrq  = MIN( GenTrq                    , VS_MaxTq  )   ! Saturate the command using the maximum torque limit
 
 
-   ! Saturate the commanded torque using the torque rate limit:
+      ! Saturate the commanded torque using the torque rate limit:
 
       IF ( iStatus == 0 )  LastGenTrq = GenTrq                 ! Initialize the value of LastGenTrq on the first pass only
       TrqRate = ( GenTrq - LastGenTrq )/ElapTime               ! Torque rate (unsaturated)
       TrqRate = MIN( MAX( TrqRate, -VS_MaxRat ), VS_MaxRat )   ! Saturate the torque rate using its maximum absolute value
       GenTrq  = LastGenTrq + TrqRate*ElapTime                  ! Saturate the command using the torque rate limit
 
-
    ! Reset the values of LastTimeVS and LastGenTrq to the current values:
 
       LastTimeVS = Time
       LastGenTrq = GenTrq
-
 
    ENDIF
 
@@ -466,10 +463,6 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    avrSWAP(35) = 1.0          ! Generator contactor status: 1=main (high speed) variable-speed generator
    avrSWAP(56) = 0.0          ! Torque override: 0=yes
    avrSWAP(47) = LastGenTrq   ! Demanded generator torque
-
-   ! Get Command from supercontroller
-   avrSWAP(47) = TorqueRef
-
 
 !=======================================================================
 
@@ -489,56 +482,64 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
    IF ( ( Time*OnePlusEps - LastTimePC ) >= PC_DT )  THEN
 
-
-   ! Compute the gain scheduling correction factor based on the previously
-   !   commanded pitch angle for blade 1:
-
-      GK = 1.0/( 1.0 + PitCom(1)/PC_KK )
+        IF (.not. PitchExternalCommand) THEN
+            ! Use native FAST.Farm pitch control
 
 
-   ! Compute the current speed error and its integral w.r.t. time; saturate the
-   !   integral term using the pitch angle limits:
+           ! Compute the gain scheduling correction factor based on the previously
+           !   commanded pitch angle for blade 1:
 
-      SpdErr    = GenSpeedF - PC_RefSpd                                 ! Current speed error
-      IntSpdErr = IntSpdErr + SpdErr*ElapTime                           ! Current integral of speed error w.r.t. time
-      IntSpdErr = MIN( MAX( IntSpdErr, PC_MinPit/( GK*PC_KI ) ), &
-                                       PC_MaxPit/( GK*PC_KI )      )    ! Saturate the integral term using the pitch angle limits, converted to integral speed error limits
+              GK = 1.0/( 1.0 + PitCom(1)/PC_KK )
 
 
-   ! Compute the pitch commands associated with the proportional and integral
-   !   gains:
+           ! Compute the current speed error and its integral w.r.t. time; saturate the
+           !   integral term using the pitch angle limits:
 
-      PitComP   = GK*PC_KP*   SpdErr                                    ! Proportional term
-      PitComI   = GK*PC_KI*IntSpdErr                                    ! Integral term (saturated)
-
-
-   ! Superimpose the individual commands to get the total pitch command;
-   !   saturate the overall command using the pitch angle limits:
-
-      PitComT   = PitComP + PitComI                                     ! Overall command (unsaturated)
-      PitComT   = MIN( MAX( PitComT, PC_MinPit ), PC_MaxPit )           ! Saturate the overall command using the pitch angle limits
+              SpdErr    = GenSpeedF - PC_RefSpd                                 ! Current speed error
+              IntSpdErr = IntSpdErr + SpdErr*ElapTime                           ! Current integral of speed error w.r.t. time
+              IntSpdErr = MIN( MAX( IntSpdErr, PC_MinPit/( GK*PC_KI ) ), &
+                                               PC_MaxPit/( GK*PC_KI )      )    ! Saturate the integral term using the pitch angle limits, converted to integral speed error limits
 
 
-   ! Saturate the overall commanded pitch using the pitch rate limit:
-   ! NOTE: Since the current pitch angle may be different for each blade
-   !       (depending on the type of actuator implemented in the structural
-   !       dynamics model), this pitch rate limit calculation and the
-   !       resulting overall pitch angle command may be different for each
-   !       blade.
+           ! Compute the pitch commands associated with the proportional and integral
+           !   gains:
+
+              PitComP   = GK*PC_KP*   SpdErr                                    ! Proportional term
+              PitComI   = GK*PC_KI*IntSpdErr                                    ! Integral term (saturated)
+
+
+           ! Superimpose the individual commands to get the total pitch command;
+           !   saturate the overall command using the pitch angle limits:
+
+              PitComT   = PitComP + PitComI                                     ! Overall command (unsaturated)
+              PitComT   = MIN( MAX( PitComT, PC_MinPit ), PC_MaxPit )           ! Saturate the overall command using the pitch angle limits
+
+
+           ! Saturate the overall commanded pitch using the pitch rate limit:
+           ! NOTE: Since the current pitch angle may be different for each blade
+           !       (depending on the type of actuator implemented in the structural
+           !       dynamics model), this pitch rate limit calculation and the
+           !       resulting overall pitch angle command may be different for each
+           !       blade.
 
 
 
+          DO K = 1,NumBl ! Loop through all blades
 
-      DO K = 1,NumBl ! Loop through all blades
+             PitRate(K) = ( PitComT - BlPitch(K) )/ElapTime                 ! Pitch rate of blade K (unsaturated)
+             PitRate(K) = MIN( MAX( PitRate(K), -PC_MaxRat ), PC_MaxRat )   ! Saturate the pitch rate of blade K using its maximum absolute value
+             PitCom (K) = BlPitch(K) + PitRate(K)*ElapTime                  ! Saturate the overall command of blade K using the pitch rate limit
 
-         PitRate(K) = ( PitComT - BlPitch(K) )/ElapTime                 ! Pitch rate of blade K (unsaturated)
-         PitRate(K) = MIN( MAX( PitRate(K), -PC_MaxRat ), PC_MaxRat )   ! Saturate the pitch rate of blade K using its maximum absolute value
-         PitCom (K) = BlPitch(K) + PitRate(K)*ElapTime                  ! Saturate the overall command of blade K using the pitch rate limit
+             PitCom(K)  = MIN( MAX( PitCom(K), PC_MinPit ), PC_MaxPit )     ! Saturate the overall command using the pitch angle limits
 
-         PitCom(K)  = MIN( MAX( PitCom(K), PC_MinPit ), PC_MaxPit )     ! Saturate the overall command using the pitch angle limits
+          ENDDO          ! K - all blades
 
-      ENDDO          ! K - all blades
-
+        ELSE
+       ! Use command from supercontroller
+            DO K = 1,NumBl ! Loop through all blades
+                PitCom(K) = PitchRef
+            ENDDO
+        ENDIF
 
    ! Reset the value of LastTimePC to the current value:
 
@@ -559,6 +560,7 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
    ! Set the pitch override to yes and command the pitch demanded from the last
    !   call to the controller (See Appendix A of Bladed User's Guide):
+   !print *, "Now passing command to avrSWAP"
 
    avrSWAP(55) = 0.0       ! Pitch override: 0=yes
 
@@ -567,9 +569,7 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    avrSWAP(44) = PitCom(3) ! "
 
    ! Get Command from supercontroller
-   avrSWAP(45) = PitchRef
-
-   !avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
+   avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
 
       IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
 
@@ -580,6 +580,8 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    ! Reset the value of LastTime to the current value:
 
    LastTime = Time
+
+!print *, "Command passed to avrSWAP"
 
 ELSEIF ( iStatus == -8 )  THEN
    ! pack

@@ -54,13 +54,13 @@ subroutine SC_Init ( nTurbines, nInpGlobal, NumCtrl2SC, NumParamGlobal,  NumPara
    !errMsg            = ''
 
    nInpGlobal        = 0
-   NumCtrl2SC        = 3
+   NumCtrl2SC        = 12
    NumParamGlobal    = 1
    NumParamTurbine   = 3
    NumStatesGlobal   = 0
    NumStatesTurbine  = 0
    NumSC2CtrlGlob    = 0
-   NumSC2Ctrl        = 3
+   NumSC2Ctrl        = 6
 
 
    return
@@ -170,39 +170,15 @@ use algoCont !appel du module
    integer(C_INT),         intent(inout) :: errStat           !< error status code (uses NWTC_Library error codes)
    character(kind=C_CHAR), intent(inout) :: errMsg       (*)  !< Error Message from DLL to simulation code
    integer                               :: i, j, c
-   !real(C_FLOAT),          intent(inout) :: wind      (*)  !< turbine specific outputs of the super controller (to the turbine controller)
-   real(C_DOUBLE)          :: wind_tmp        !< turbine specific outputs of the super controller (to the turbine controller)
 
-   logical(C_BOOL) :: adaptive_tau
-   logical(C_BOOL) :: zap_learning
-   real(C_DOUBLE) :: n_turbines
-   real(C_DOUBLE) :: time
    real(C_DOUBLE) :: ws(nTurbines) !3
    real(C_DOUBLE) :: wd(nTurbines) !3
    real(C_DOUBLE) :: power(nTurbines) !3
-   real(C_DOUBLE) :: start_time
-   real(C_DOUBLE) :: u_inf
-   real(C_DOUBLE) :: dt
-   real(C_DOUBLE) :: wait_time
-   real(C_DOUBLE) :: yaw_init(nTurbines) !3
    REAL(C_DOUBLE) :: yawRef(nTurbines) !3
    REAL(C_DOUBLE) :: pitchRef(nTurbines) !3
    REAL(C_DOUBLE) :: torqueRef(nTurbines) !3
-   REAL(C_DOUBLE) :: old_prod(nTurbines) !3
-   REAL(C_DOUBLE) :: new_prod(nTurbines) !3
-
-   ! For bobyqa
-   real(C_DOUBLE) :: propagation_delay
-   !CHARACTER(len=40) ::  com_file_yaws    = 'com_yaws.csv'//achar(0)
-   !CHARACTER(len=40) ::  com_file_power    = 'com_power.csv'//achar(0)
-
-   ! For anyalgo interface
-   !CHARACTER(len=100) ::  com_file_yaws    = 'C:\\Users\\bizonmoc\\Documents\\rl-farmcontrol\\simul\\FF_dec_A2C\\com_files\\yaws.csv'//achar(0)
-   !CHARACTER(len=100) ::  com_file_power    = 'C:\\Users\\bizonmoc\\Documents\\rl-farmcontrol\\simul\\FF_dec_A2C\\com_files\\power.csv'//achar(0)
-   !CHARACTER(len=100) ::  com_file_wind    = 'C:\\Users\\bizonmoc\\Documents\\rl-farmcontrol\\simul\\FF_dec_A2C\\com_files\\wind.csv'//achar(0)
-   CHARACTER(len=100) ::  com_file_yaws    = 'L:\\Users\\bizonmoc\\Documents\\rl-farmcontrol-fast\\simul\\temp2\\com_files\\yaws.csv'//achar(0)
-   CHARACTER(len=100) ::  com_file_power    = 'L:\\Users\\bizonmoc\\Documents\\rl-farmcontrol-fast\\simul\\temp2\\com_files\\power.csv'//achar(0)
-   CHARACTER(len=100) ::  com_file_wind    = 'L:\\Users\\bizonmoc\\Documents\\rl-farmcontrol-fast\\simul\\temp2\\com_files\\wind.csv'//achar(0)
+   REAL(C_DOUBLE) :: activateControl(3) ! activate control for yaw, pitch, torque
+   REAL(C_DOUBLE) :: to_interface(nTurbines*NumCtrl2SC) !3
 
    ! For MPI communication
    integer process_Rank, size_Of_Cluster, ierror
@@ -210,7 +186,7 @@ use algoCont !appel du module
    integer initialized, finalized
    integer message
    integer command_process_rank
-   integer yaw_tag, pitch_tag, torque_tag, power_tag, ws_tag, wd_tag, final_tag
+   integer yaw_tag, pitch_tag, torque_tag, com_tag, measures_tag
 
    integer, dimension(MPI_STATUS_SIZE) :: statut
 
@@ -219,87 +195,28 @@ use algoCont !appel du module
    finalized = 0
 
    ! MPI comm tags
-   yaw_tag = 0
-   pitch_tag = 1
-   torque_tag = 2
-   power_tag = 3
-   ws_tag = 4
-   wd_tag = 5
-   !final_tag = 3
+   yaw_tag = 1
+   pitch_tag = 2
+   torque_tag = 3
+   com_tag = 0
+   measures_tag = 4
    command_process_rank = 1
 
    call MPI_INITIALIZED(initialized, ierror)
    if (int(t)==0) then
       print *, 'Initialize MPI'
       call MPI_INIT(ierror)
-      !print *, 'Launch receive OP to wait for final signal'
-      !call MPI_IRECV(finalized, 1, MPI_INT, command_process_rank, final_tag, MPI_COMM_WORLD, statut, ierror)
+      ! Send a message giving the number of measures given at every iteration
+      call MPI_SEND(NumCtrl2SC, 1, MPI_INT, command_process_rank, com_tag, MPI_COMM_WORLD, ierror)
    end if
 
-   ! Define config
-   !type (config) :: algo_config
-
-   !Present dans le code initial (ne sert  rien  priori)
+   !Reception des variables venant du controleur DISCON
+   !to_SC: [all_vars_for_turbine1, all_vars_for_turbine2, ..., all_vars_for_turbineM]
    do j = 1, nTurbines
-      do i = 1, NumSC2Ctrl
-         from_SC((j-1)*NumSC2Ctrl+i) = 0 !real(0.05 * sin(paramTurbine(j) * t)) ! The yaw is the yaw rate times the time
+      do i = 1, NumCtrl2SC
+         to_interface((j-1)*NumCtrl2SC+i) = to_SC((j-1)*NumCtrl2SC+i)
       end do
    end do
-   !print *, 'FORTRAN number of global controllers', NumSC2CtrlGlob, ' Number of turbine specfic controllers: ', NumSC2Ctrl
-
-   !Reception des variables venant du controleur DISCON
-    do j = 1, nTurbines
-      power(j) = to_SC((j-1)*NumCtrl2SC+2)
-      ws(j) = to_SC((j-1)*NumCtrl2SC+1)
-      wd(j) = to_SC((j-1)*NumCtrl2SC+3)
-      !print *, "wind direction ", wd(j)
-      yawRef(j) = 0
-   end do
-   !do j = 1, nTurbines
-   !   ws(j) = to_SC(NumCtrl2SC*j-2)
-   !   power(j) = to_SC(NumCtrl2SC*j-1)
-   !   wd(j) = to_SC(NumCtrl2SC*j)
-   !   !print*, "wind direction", wd(j)
-   !   yawRef(j) = 0
-   !end do
-
-   !Parametrage de la fonction
-   !n_turbines = nTurbines
-   !time = t
-   !start_time = 1800.0
-   !u_inf = 8.0
-   !dt = 3 !
-   !wait_time = 1041
-   !do j = 1, nTurbines
-   !   yaw_init(j) = 0 !en deg
-   !end do
-   ! FLORIS init ! [28. 27. -1.]
-   ! FLORIS init - wind_shear = 0.0 [30, 23, 0]
-   ! FLORIS init q learning [31, 24, -1]
-   ! FLORIS init q learning polynom [30, 24, 0]
-   ! FLORIS init q learning 6 turbines [29, 25, 0, 28, 24, 0]
-   ! bobyqa 0 turb init [33, 33, 0]
-   ! standard init : [0, 0, 0]
-   !yaw_init(1) = 0 !en deg
-   !yaw_init(2) = 0! 27 !23 !27 ! 0
-   !yaw_init(3) = 0 !0 !-1
-   !yaw_init(4) = 28 ! 0 !en deg
-   !yaw_init(5) = 24 ! 0
-   !yaw_init(6) = 0
-   !zap_learning = .false.
-   !adaptive_tau = .false.
-    ! For bobyqa
-   !propagation_delay = 2500
-   ! Just for test cases
-   !propagation_delay = 200
-   !algo_config = config(0)
-
-   !Appel de l'algo de controle
-   ! With control:
-   !call fctControl(zap_learning,adaptive_tau,n_turbines,time,ws,power,start_time,u_inf,dt,wait_time,yaw_init,yawRef,old_prod,new_prod) !q_learning
-   !call bobyqaControl(com_file_yaws,com_file_power,power,time,yaw_init,propagation_delay,yawRef)
-   !call anyAlgoControl(n_turbines, power, ws, time, com_file_yaws, com_file_power, com_file_wind, yawRef)
-   !call lutControl(ws, yawRef)
 
    ! Get control command from other MPI process
    !print *, 'Value of finalized', finalized
@@ -310,70 +227,26 @@ use algoCont !appel du module
    !end if
 
    if (initialized) then
-      !call MPI_COMM_SIZE(MPI_COMM_WORLD, size_Of_Cluster, ierror)
-      !call MPI_COMM_RANK(MPI_COMM_WORLD, process_Rank, ierror)
-      !print *, 'FORTRAN process at time', int(t), 'Process', process_Rank, 'of ', size_Of_Cluster
-      call MPI_RECV(yawRef, nTurbines, MPI_DOUBLE, command_process_rank, yaw_tag, MPI_COMM_WORLD, statut, ierror)
-      call MPI_RECV(pitchRef, nTurbines, MPI_DOUBLE, command_process_rank, pitch_tag, MPI_COMM_WORLD, statut, ierror)
-      call MPI_RECV(torqueRef, nTurbines, MPI_DOUBLE, command_process_rank, torque_tag, MPI_COMM_WORLD, statut, ierror)
-      !call MPI_BARRIER(MPI_COMM_WORLD, ierror)
-      !print *, '***** Received output, yaw ', yawRef(1), 'error: ', ierror
-      call MPI_SEND(power, nTurbines, MPI_DOUBLE, command_process_rank, power_tag, MPI_COMM_WORLD, ierror)
-      !print *, '***** Sent output, power: ', power(1), 'error: ', ierror
-      call MPI_SEND(ws, nTurbines, MPI_DOUBLE, command_process_rank, ws_tag, MPI_COMM_WORLD, ierror)
-      call MPI_SEND(wd, nTurbines, MPI_DOUBLE, command_process_rank, wd_tag, MPI_COMM_WORLD, ierror)
-      !print *, '***** Sent output, ws: ', ws(1), 'error: ', ierror
+      call MPI_RECV(yawRef, nTurbines+1, MPI_DOUBLE, command_process_rank, yaw_tag, MPI_COMM_WORLD, statut, ierror)
+      call MPI_RECV(pitchRef, nTurbines+1, MPI_DOUBLE, command_process_rank, pitch_tag, MPI_COMM_WORLD, statut, ierror)
+      call MPI_RECV(torqueRef, nTurbines+1  , MPI_DOUBLE, command_process_rank, torque_tag, MPI_COMM_WORLD, statut, ierror)
+      call MPI_SEND(to_interface, NumCtrl2SC*nTurbines, MPI_DOUBLE, command_process_rank, measures_tag, MPI_COMM_WORLD, ierror)
       call MPI_BARRIER(MPI_COMM_WORLD, ierror)
    end if
 
 
-   ! Without control:
-   !do j = 1, nTurbines
-   !   yawRef(j) = yaw_init(j) / 180.0 * asin(1.0) * 2.0 !en rad
-   !end do
-
-
    !!Affectation des variables  communiquer au contrleur DISCON
-   !print *, 'Sending variables to DISCON'
    do j = 1, nTurbines
-      from_SC((j-1)*NumSC2Ctrl+1) = yawRef(j)
-      from_SC((j-1)*NumSC2Ctrl+2) = pitchRef(j)
-      from_SC((j-1)*NumSC2Ctrl+3) = torqueRef(j)
+      from_SC((j-1)*NumSC2Ctrl+1) = yawRef(1) ! activateControl for yaw
+      from_SC((j-1)*NumSC2Ctrl+2) = pitchRef(1) ! ... for pitch
+      from_SC((j-1)*NumSC2Ctrl+3) = torqueRef(1) ! ... for torque
+      from_SC((j-1)*NumSC2Ctrl+1+3) = yawRef(j+1)
+      from_SC((j-1)*NumSC2Ctrl+2+3) = pitchRef(j+1)
+      from_SC((j-1)*NumSC2Ctrl+3+3) = torqueRef(j+1)
    end do
 
    !Saturation en vitesse de yaw dans DISCON (inutilise pour le moment)
    from_SCglob(1) = 0.005235 !0.3deg/s
-
-   !Ecriture d'un fichier debug
-   !OPEN  (456, FILE='windSC.dat', STATUS='old',position="append")
-   !!WRITE (456,*)(yawRef(i),achar(9),i=1,3) !boucle pour crire les 3 variables
-   !WRITE (456,*) t
-   !WRITE (456,*) yawRef(1),yawRef(2),yawRef(3)
-   !WRITE (456,*) power(1),power(2),power(3)
-   !WRITE (456,*) ws(1),ws(2),ws(3)
-   !WRITE (456,*) old_prod(1),old_prod(2),old_prod(3)
-   !WRITE (456,*) new_prod(1),new_prod(2),new_prod(3)
-   !close (456)
-
-   !from_SC(1) = 0
-   !from_SC(2) = 0
-   !from_SC(3) = 0
-
-   !if ( t >= 2500 ) then
-   !    from_SC(1) = 0.523598775598299 !30
-   !    from_SC(2) = 0
-   !    from_SC(3) = 0
-   !end if
-
-   !opti FLORIS Ti=8% 4D
-   !from_SC(1) = 0.521228292097520
-   !from_SC(2) = 0.400952864159124
-   !from_SC(3) = 0
-
-   !opti FLORIS Ti=8% 8D
-   !from_SC(1) = 0.377538614254492
-   !from_SC(2) = 0.193676490560116
-   !from_SC(3) = 0
 
 
    return

@@ -1,5 +1,5 @@
 """
-2 x 3 Layout. 
+2 x 3 Layout.
 Used on FAST.Farm
 """
 
@@ -9,4 +9,4 @@ Cy = [-252, -252, -252, 252, 252, 252]
 dt = 3
 buffer_window = 600
 
-interface_kwargs = {"measurement_window": int(buffer_window/dt)}
+interface_kwargs = {"measurement_window": int(buffer_window / dt)}

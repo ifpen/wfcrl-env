@@ -18,22 +18,15 @@ class WindFarmEnv(gym.Env):
         continuous_control: bool = True,
         interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = None,
+        start_iter: int = 0,
     ):
-        # TODO: make start_state
-        start_state = {
-            "wind_measurements": np.array([8, 0]),
-            "yaw": np.array([0, 0, 0]),
-            "pitch": np.array([0, 0, 0]),
-            "torque": np.array([0, 0, 0]),
-        }
-
         self.mdp = WindFarmMDP(
             interface=interface,
             num_turbines=num_turbines,
             controls=controls,
-            start_state=start_state,
             continuous_control=continuous_control,
             interface_kwargs=interface_kwargs,
+            start_iter=start_iter,
         )
         self.continuous_control = continuous_control
         self.action_space = self.mdp.action_space
@@ -50,13 +43,13 @@ class WindFarmEnv(gym.Env):
 
     def step(self, actions: Dict):
         """
-        action: np.array of shape (n_turbines,)
+        action: dictionary of np.array of shape (n_turbines,)
         """
-        next_state, powers = self.mdp.take_action(self._state, actions)
+        next_state, powers, loads = self.mdp.take_action(self._state, actions)
         reward = np.array([self.reward_shaper(powers.sum())])
         self._state = next_state
         terminated = np.array(False)
         truncated = np.array(False)
-        info = {"power": powers}
+        info = {"power": powers, "loads": loads}
         observation = copy.deepcopy(self._state)
         return observation, reward, terminated, truncated, info
