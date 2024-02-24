@@ -12,4 +12,7 @@ buffer_window = 600
 t_init = 9
 
 simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "dt": dt}
-interface_kwargs = {"measurement_window": int(buffer_window / dt)}
+interface_kwargs = {
+    "measurement_window": int(buffer_window / dt),
+    "simul_kwargs": simul_kwargs,
+}

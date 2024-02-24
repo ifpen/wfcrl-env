@@ -4,21 +4,15 @@ from typing import List
 
 import numpy as np
 from dotenv import load_dotenv
+from floris import tools
 from mpi4py import MPI
 
-from src.simul_utils import create_ff_case
+from src.simul_utils import create_ff_case, create_floris_case
 
 # load environment variables from .env
 load_dotenv()
 
-YAW_TAG = 1
-PITCH_TAG = 2
-TORQUE_TAG = 3
-COM_TAG = 0
-MEASURES_TAG = 4
-
 # default measure indices in the com matrix
-DEFAULT_MEASURE_MAP = {"yaw": 3, "pitch": 4, "torque": 5, "load": [6, 7, 8, 9, 10, 11]}
 
 
 class BaseInterface(ABC):
@@ -73,6 +67,25 @@ class PowerBuffer:
 
 
 class MPI_Interface(BaseInterface):
+    CONTROL_SET = ["yaw", "pitch", "torque"]
+    # `wind_measurements` is not read from the simulator
+    # but computed by the interface
+    DEFAULT_MEASURE_MAP = {
+        "wind_speed": 0,
+        "power": 1,
+        "wind_direction": 2,
+        "yaw": 3,
+        "pitch": 4,
+        "torque": 5,
+        "load": [6, 7, 8, 9, 10, 11],
+        "wind_measurements": None,
+    }
+    YAW_TAG = 1
+    PITCH_TAG = 2
+    TORQUE_TAG = 3
+    COM_TAG = 0
+    MEASURES_TAG = 4
+
     def __init__(
         self,
         measurement_window: int = 30,
@@ -95,11 +108,13 @@ class MPI_Interface(BaseInterface):
         self._buffer_size = buffer_size
         self._measurement_window = measurement_window
         num_measures = np.array([0], dtype=int)
-        self._comm.Recv(num_measures, source=self._target_process_rank, tag=COM_TAG)
+        self._comm.Recv(
+            num_measures, source=self._target_process_rank, tag=self.COM_TAG
+        )
         self._comm.Send(
             buf=np.array([max_iter], dtype=int),
             dest=self._target_process_rank,
-            tag=COM_TAG,
+            tag=self.COM_TAG,
         )
         self._max_iter = max_iter
         self._num_measures = num_measures[0]
@@ -108,7 +123,9 @@ class MPI_Interface(BaseInterface):
         )
 
         # Maintain mapping with measure name -> ID in measure matrix
-        self.measure_map = DEFAULT_MEASURE_MAP if measure_map is None else measure_map
+        self.measure_map = (
+            self.DEFAULT_MEASURE_MAP if measure_map is None else measure_map
+        )
         self.num_turbines = num_turbines
         self._power_buffers = PowerBuffer(self.num_turbines, size=self._buffer_size)
         self._wind_buffers = PowerBuffer(2, size=self._buffer_size)
@@ -149,17 +166,19 @@ class MPI_Interface(BaseInterface):
             self._current_torque_command[0] = 1.0
 
         self._comm.Send(
-            buf=self._current_yaw_command, dest=self._target_process_rank, tag=YAW_TAG
+            buf=self._current_yaw_command,
+            dest=self._target_process_rank,
+            tag=self.YAW_TAG,
         )
         self._comm.Send(
             buf=self._current_pitch_command,
             dest=self._target_process_rank,
-            tag=PITCH_TAG,
+            tag=self.PITCH_TAG,
         )
         self._comm.Send(
             buf=self._current_torque_command,
             dest=self._target_process_rank,
-            tag=TORQUE_TAG,
+            tag=self.TORQUE_TAG,
         )
         power, wind = self._wait_for_sim_output()
         self._power_buffers.add(power)
@@ -223,12 +242,15 @@ class MPI_Interface(BaseInterface):
     def _wait_for_sim_output(self):
         size_buffer = self.num_turbines * self._num_measures
         measures = np.zeros(size_buffer, dtype=np.double)
-        self._comm.Recv(measures, source=self._target_process_rank, tag=MEASURES_TAG)
+        self._comm.Recv(
+            measures, source=self._target_process_rank, tag=self.MEASURES_TAG
+        )
         self._comm.Barrier()
         measures = measures.reshape((self.num_turbines, self._num_measures))
         # print(f"Received measures matrix from simulator: {measures}")
-        speeds, directions = measures[:, 0].flatten(), measures[:, 2].flatten()
-        powers = measures[:, 1].flatten()
+        speeds = measures[:, self.measure_map["wind_speed"]].flatten()
+        directions = measures[:, self.measure_map["power"]].flatten()
+        powers = measures[:, self.measure_map["wind_direction"]].flatten()
         upstream_point = np.argmax(speeds)
         wspeed = speeds[upstream_point]
         wdir = np.degrees(directions[upstream_point])
@@ -245,25 +267,17 @@ class MPI_Interface(BaseInterface):
 class FastFarmInterface(MPI_Interface):
     def __init__(
         self,
+        num_turbines: int,
+        simul_kwargs: dict,
         measurement_window: int = 30,
         buffer_size: int = 50_000,
-        num_turbines: int = 3,
         log_file: str = None,
         measure_map: dict = None,
-        xcoords: List = [0.0],
-        ycoords: List = [0.0],
-        max_iter=int(1e4),
-        dt: float = 3.0,
+        max_iter: int = int(1e4),
     ):
         path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
 
-        simul_file = create_ff_case(
-            xcoords=xcoords,
-            ycoords=ycoords,
-            zcoords=[0.0 for _ in xcoords],
-            max_iter=max_iter,
-            dt=dt,
-        )
+        simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
 
         spawn_comm = MPI.COMM_SELF.Spawn(
             path_to_fastfarm_exe, args=[simul_file], maxprocs=1
@@ -282,16 +296,35 @@ class FastFarmInterface(MPI_Interface):
 
 
 class FlorisInterface(BaseInterface):
+    CONTROL_SET = ["yaw"]
+    # `wind_measurements` handled separately
+    DEFAULT_MEASURE_MAP = {"yaw": 0, "wind_measurements": None}
+    YAW_TAG = 1
+    PITCH_TAG = 2
+    TORQUE_TAG = 3
+    COM_TAG = 0
+    MEASURES_TAG = 4
+
     def __init__(
         self,
-        num_turbines: int = 3,
+        num_turbines: int,
+        simul_kwargs: dict,
+        max_iter: int = int(1e4),
         log_file: str = None,
-        measure_map: dict = None,
     ):
         super(FlorisInterface, self).__init__()
 
+        simul_file = create_floris_case(**simul_kwargs)
         self.num_turbines = num_turbines
+        self.fi = tools.FlorisInterface(simul_file)
+        self.fi.reinitialize()
         self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
+        self.measure_map = self.DEFAULT_MEASURE_MAP
+        self.current_measures = (
+            np.zeros((self.num_turbines, len(self.measure_map) - 1)) * np.nan
+        )
+        self._num_iter = 0
+        self._max_iter = max_iter
         self._logging = False
         if log_file is not None:
             self._log_file = log_file
@@ -299,11 +332,11 @@ class FlorisInterface(BaseInterface):
 
     @property
     def wind_speed(self):
-        return self.get_turbine_wind()[0]
+        return self.fi.floris.flow_field.wind_speeds[0]
 
     @property
     def wind_dir(self):
-        return self.get_turbine_wind()[1]
+        return self.fi.floris.flow_field.wind_directions[0]
 
     def update_command(
         self,
@@ -312,34 +345,33 @@ class FlorisInterface(BaseInterface):
         if yaw is not None:
             self._current_yaw_command[0, 0, :] = yaw.astype(np.double)
         self.fi.calculate_wake(yaw_angles=self._current_yaw_command)
+        self.current_measures[:, 0] = self.fi.floris.farm.yaw_angles
+        self._num_iter += 1
         if self._logging:
             with open(self._log_file, "a") as fp:
                 fp.write(
                     f"Sent command YAW {self.get_yaw_command()} - "
-                    f" PITCH {self.get_pitch_command()}"
-                    f" TORQUE {self.get_torque_command()}\n"
                     f"***********Received Power: {self.get_turbine_powers()}"
                     f" Wind : {self.get_turbine_wind()}\n"
                 )
+        return self._num_iter == self._max_iter
 
     def get_yaw_command(self):
-        if 1 - self._current_yaw_command[0]:
-            return None
-        return np.degrees(self._current_yaw_command).copy()[1:]
+        return self._current_yaw_command.copy().flatten()
 
     def get_farm_power(self):
         powers = self.get_turbine_powers()
         return powers.sum()
 
     def get_turbine_powers(self) -> List:
-        return self.fi.get_turbine_powers()
+        return self.fi.get_turbine_powers().flatten()
 
-    def get_turbine_wind(self, window: int = None) -> List:
-        if window is None:
-            window = self._measurement_window
-        return self._wind_buffers.get_agg(window)
+    def get_turbine_wind(self) -> List:
+        return np.array([self.wind_speed, self.wind_dir])
 
     def get_measure(self, measure: str) -> np.ndarray:
+        if measure not in self.measure_map:
+            return None
         if measure == "wind_measurements":
             return self.get_turbine_wind()
         return self.current_measures[:, self.measure_map[measure]]

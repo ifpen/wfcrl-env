@@ -1,25 +1,23 @@
 import numpy as np
 
-from src.cases import farm_6_fastfarm as case
-from src.interface import FastFarmInterface
+from src.cases import farm_3_floris as case
+from src.interface import FlorisInterface
 from src.multiagent_env import MAWindFarmEnv
 from src.rewards import StepPercentage
 
-controls = {"yaw": (-20, 20, 15), "pitch": (0, 45, 1)}
-T = 40
+controls = {"yaw": (-20, 20, 15)}
 
 
 def dummy_policy(agent, i):
     if (agent == "turbine_1") and (i == 20):
         return {
             "yaw": np.array([15.0]),
-            "pitch": np.array([3.0]),
         }
-    return {"yaw": np.array([0]), "pitch": np.array([0.0])}
+    return {"yaw": np.array([0])}
 
 
 env = MAWindFarmEnv(
-    interface=FastFarmInterface,
+    interface=FlorisInterface,
     num_turbines=case.n_turbines,
     controls=controls,
     interface_kwargs=case.interface_kwargs,

@@ -32,7 +32,7 @@ class WindFarmMDP:
     """
 
     CONTROL_SET = ["yaw", "pitch", "torque"]
-    STATE_ATTRIBUTES = ["wind_measurements", "yaw", "pitch", "torque"]
+    POSSIBLE_STATE_ATTRIBUTES = ["wind_measurements", "yaw", "pitch", "torque"]
     DEFAULT_BOUNDS = {
         "wind_speed": [3, 28],
         "wind_direction": [0, 360],
@@ -63,7 +63,13 @@ class WindFarmMDP:
         self.controls = controls
         self.num_controls = len(controls)
         # All non controlled observations are measured
-        self.measures = [obs for obs in self.STATE_ATTRIBUTES if obs not in controls]
+        # but only if they can be measured by the interface
+        self.measures = [
+            obs
+            for obs in self.POSSIBLE_STATE_ATTRIBUTES
+            if (obs not in controls) and (obs in self.interface.measure_map)
+        ]
+        self.state_attributes = list(self.controls.keys()) + self.measures
 
         # Setup actions
         if self.continuous_control:
@@ -94,14 +100,14 @@ class WindFarmMDP:
             self.interface.update_command()
         # Retrieve state at start_iter
         start_state = OrderedDict(
-            {attr: self.interface.get_measure(attr) for attr in self.STATE_ATTRIBUTES}
+            {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
         )
         print(f"Start state {start_state}")
 
         # Setup state space
         state_space_dict = {}
         bound_array = np.ones(num_turbines, dtype=np.float32)
-        for attr in self.STATE_ATTRIBUTES:
+        for attr in self.state_attributes:
             if attr == "wind_measurements":
                 low_ws, high_ws = self.DEFAULT_BOUNDS["wind_speed"]
                 (
@@ -136,9 +142,15 @@ class WindFarmMDP:
 
     def _check_controls(self, control_dict: Dict):
         for name, bounds_and_step in control_dict.items():
+            # Check that the chosen interface implements the controls
             if name not in self.CONTROL_SET:
                 raise ValueError(
                     f"Cannot control {name}. Allowed controls are {self.CONTROL_SET}"
+                )
+            if name not in self.interface.CONTROL_SET:
+                raise ValueError(
+                    f"Cannot control `{name}`. Interface {self.interface.__class__.__name__}"
+                    f" only allows for the following: {self.interface.CONTROL_SET}"
                 )
             len_b = len(bounds_and_step)
             if not (
@@ -169,10 +181,10 @@ class WindFarmMDP:
 
     def _check_state(self, state: Dict):
         for attr, value in state.items():
-            if attr not in self.STATE_ATTRIBUTES:
+            if attr not in self.state_attributes:
                 raise ValueError(
                     f"Unknwon attribute {attr} in state dict."
-                    f"Accepted attributed are: {self.STATE_ATTRIBUTES}"
+                    f"Accepted attributed are: {self.state_attributes}"
                 )
             if not isinstance(value, np.ndarray):
                 raise TypeError(
@@ -196,7 +208,9 @@ class WindFarmMDP:
         for measure in self.measures:
             state[measure] = self.interface.get_measure(measure)
         loads = self.interface.get_measure("load")
-        return state, powers / 1e6, loads / 1e6, done
+        if loads is not None:
+            loads /= 1e6
+        return state, powers / 1e6, loads, done
 
     def take_action(self, state: Dict, joint_action: Dict):
         next_state = self.get_controlled_state_transition(state, joint_action)

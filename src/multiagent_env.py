@@ -185,8 +185,9 @@ class MAWindFarmEnv(AECEnv):
                 self.terminations[agent] = False
                 self.infos[agent] = {
                     "power": powers[self.agent_name_mapping[agent]],
-                    "load": loads[self.agent_name_mapping[agent]],
                 }
+                if loads is not None:
+                    self.infos[agent]["load"] = loads[self.agent_name_mapping[agent]]
             if truncated:
                 self.agents = []
             self.num_moves += 1

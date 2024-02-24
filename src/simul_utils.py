@@ -6,12 +6,13 @@ import glob
 import os
 import shutil
 
+import yaml
 from openfast_toolbox.fastfarm import fastFarmTurbSimExtent, writeFastFarm
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 
-TEMPLATE_DIR = "simulators/fastfarm/inputs/template/"
-CASE_DIR = "simulators/fastfarm/inputs/"
-SERVO_DIR = "simulators/fastfarm/servo_dll/"
+TEMPLATE_DIR = "simulators/{}/inputs/template/"
+CASE_DIR = "simulators/{}/inputs/"
+SERVO_DIR = "simulators/{}/servo_dll/"
 
 
 def clean_folder(path):
@@ -22,10 +23,26 @@ def clean_folder(path):
             os.remove(subpath)
 
 
-def create_ff_case(xcoords, ycoords, zcoords, max_iter, dt):
-    template_dir = TEMPLATE_DIR
-    output_dir = CASE_DIR
-    servoDir = SERVO_DIR
+def create_floris_case(xcoords, ycoords, direction=None, speed=None):
+    template_dir = TEMPLATE_DIR.format("floris")
+    output_dir = CASE_DIR.format("floris")
+    with open(f"{template_dir}case.yaml", "r") as fp:
+        config = yaml.safe_load(fp)
+    config["farm"]["layout_x"] = xcoords
+    config["farm"]["layout_y"] = ycoords
+    if direction is not None:
+        config["flow_field"]["wind_directions"] = [direction]
+    if speed is not None:
+        config["flow_field"]["layout_y"] = [speed]
+    with open(f"{output_dir}case.yaml", "w") as fp:
+        yaml.safe_dump(config, fp)
+    return f"{output_dir}case.yaml"
+
+
+def create_ff_case(xcoords, ycoords, max_iter, dt):
+    template_dir = TEMPLATE_DIR.format("fastfarm")
+    output_dir = CASE_DIR.format("fastfarm")
+    servoDir = SERVO_DIR.format("fastfarm")
     clean_folder(f"{output_dir}FarmInputs/*")
     clean_folder(f"{output_dir}5MW_Baseline/*")
     templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
@@ -59,6 +76,8 @@ def create_ff_case(xcoords, ycoords, zcoords, max_iter, dt):
     chord_max = 5
     # Meandering constant (-)
     Cmeander = 1.9
+    # All turbine have same z coordinates
+    zcoords = [0.0 for _ in xcoords]
 
     # TurbSim Box to be used in FAST.Farm simulation, need to exist.
     BTS_filename = os.path.join(

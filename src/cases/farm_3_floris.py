@@ -10,7 +10,8 @@ ycoords = [400.0, 400.0, 400.0]
 
 dt = 1
 buffer_window = 1
+t_init = 0
 
 interface_kwargs = {}
-interface_kwargs["layout"] = (xcoords, ycoords)
-interface_kwargs["wind_series"] = None
+simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "direction": 270}
+interface_kwargs["simul_kwargs"] = simul_kwargs
