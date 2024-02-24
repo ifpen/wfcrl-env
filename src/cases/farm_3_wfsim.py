@@ -5,7 +5,7 @@ turbulence parameterization improves the jensen wake model and its
 implementation for power optimization of an operating wind farm"
 """
 
-N_TURBINES = 3
+n_turbines = 3
 
 Cx = [400.0, 1000.0, 1600.0]
 Cy = [400.0, 400.0, 400.0]

@@ -2,3 +2,4 @@ mpi4py==3.1.5
 numpy==1.26.3
 setuptools==69.0.3
 wheel==0.42.0
+openfast_toolbox @ git+https://github.com/OpenFAST/openfast_toolbox.git

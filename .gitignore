@@ -1,5 +1,6 @@
-example/bin/*
-example/5MW_Baseline/*
+simulators/fastfarm/bin/*
+simulators/fastfarm/inputs/5MW_Baseline/*
+simulators/fastfarm/inputs/FarmInputs/*
 src/__pycache__/*
 *.sum
 *.ech

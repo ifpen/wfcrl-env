@@ -45,7 +45,9 @@ class WindFarmEnv(gym.Env):
         """
         action: dictionary of np.array of shape (n_turbines,)
         """
-        next_state, powers, loads = self.mdp.take_action(self._state, actions)
+        next_state, powers, loads, truncated = self.mdp.take_action(
+            self._state, actions
+        )
         reward = np.array([self.reward_shaper(powers.sum())])
         self._state = next_state
         terminated = np.array(False)

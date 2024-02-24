@@ -49,11 +49,14 @@ class WindFarmMDP:
         continuous_control: bool = True,
         interface_kwargs: dict = {},
         start_iter: int = 0,
+        horizon: int = int(1e6),
     ):
         interface_kwargs["num_turbines"] = num_turbines
+        interface_kwargs["max_iter"] = horizon
         self.interface = interface(**interface_kwargs)
         self.num_turbines = num_turbines
         self.continuous_control = continuous_control
+        self.horizon = horizon
 
         # Check validity of controls
         self._check_controls(controls)
@@ -86,20 +89,14 @@ class WindFarmMDP:
                 }
             )
 
-        # Take a first step in the interface
+        # Take first steps in the interface until start_iter
         for t in range(start_iter + 1):
             self.interface.update_command()
+        # Retrieve state at start_iter
         start_state = OrderedDict(
-            zip(
-                self.STATE_ATTRIBUTES,
-                [
-                    self.interface.get_turbine_wind(),
-                    self.interface.current_measures[:, 3],
-                    self.interface.current_measures[:, 4],
-                    self.interface.current_measures[:, 5],
-                ],
-            )
+            {attr: self.interface.get_measure(attr) for attr in self.STATE_ATTRIBUTES}
         )
+        print(f"Start state {start_state}")
 
         # Setup state space
         state_space_dict = {}
@@ -194,17 +191,17 @@ class WindFarmMDP:
         step_dict = {}
         for control in self.controls:
             step_dict[control] = state[control]
-        self.interface.update_command(**step_dict)
+        done = self.interface.update_command(**step_dict)
         powers = self.interface.get_turbine_powers()
         for measure in self.measures:
             state[measure] = self.interface.get_measure(measure)
         loads = self.interface.get_measure("load")
-        return state, powers / 1e6, loads / 1e6
+        return state, powers / 1e6, loads / 1e6, done
 
     def take_action(self, state: Dict, joint_action: Dict):
         next_state = self.get_controlled_state_transition(state, joint_action)
-        next_state, powers, loads = self.step_interface(next_state)
-        return next_state, powers, loads
+        next_state, powers, loads, done = self.step_interface(next_state)
+        return next_state, powers, loads, done
 
     def get_controlled_state_transition(self, state: Dict, joint_action: Dict):
         # Deterministic transition

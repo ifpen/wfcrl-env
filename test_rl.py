@@ -29,7 +29,7 @@ def test_mdp(mdp, T=20):
         joint_action["yaw"][0] = 0
         if i == 20:
             joint_action["yaw"][0] = 30
-        state, powers, loads = mdp.take_action(state, joint_action)
+        state, powers, loads, done = mdp.take_action(state, joint_action)
         print(f"Step {i}: powers {powers}")
     return
 

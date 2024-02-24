@@ -1,4 +1,4 @@
-N_TURBINES = 16
+n_turbines = 16
 
 Cx = [
     0.8915,

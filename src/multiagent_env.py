@@ -12,6 +12,8 @@ from src.rewards import RewardShaper
 
 
 class MAWindFarmEnv(AECEnv):
+    metadata = {"name": "multiagent-windfarm"}
+
     def __init__(
         self,
         interface: BaseInterface,
@@ -21,6 +23,7 @@ class MAWindFarmEnv(AECEnv):
         interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = None,
         start_iter: int = 0,
+        max_num_steps: int = 500,
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
@@ -29,9 +32,10 @@ class MAWindFarmEnv(AECEnv):
             continuous_control=continuous_control,
             interface_kwargs=interface_kwargs,
             start_iter=start_iter,
+            horizon=start_iter + max_num_steps,
         )
-
         self.continuous_control = continuous_control
+        self.max_num_steps = max_num_steps
         self._state = self.mdp.start_state
         self.num_turbines = self.mdp.num_turbines
         if reward_shaper is not None:
@@ -164,12 +168,10 @@ class MAWindFarmEnv(AECEnv):
         self._cumulative_rewards[agent] = 0
         # stores action of current agent
         self.actions[self.agent_selection] = action
-        self.terminations[agent] = False
-        self.truncations[agent] = False
 
         # collect reward when all agents have taken an action
         if self._agent_selector.is_last():
-            next_state, powers, loads = self.mdp.take_action(
+            next_state, powers, loads, truncated = self.mdp.take_action(
                 self._state, self._join_actions(self.actions)
             )
             reward = np.array([self.reward_shaper(powers.sum())])
@@ -179,10 +181,14 @@ class MAWindFarmEnv(AECEnv):
                 # might change later to account for fatigue
                 self.rewards[agent] = reward
                 self.observations[agent] = self.observe(agent)
+                self.truncations[agent] = truncated
+                self.terminations[agent] = False
                 self.infos[agent] = {
                     "power": powers[self.agent_name_mapping[agent]],
                     "load": loads[self.agent_name_mapping[agent]],
                 }
+            if truncated:
+                self.agents = []
             self.num_moves += 1
         else:
             # no reward allocated until all players take an action

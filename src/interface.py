@@ -1,9 +1,16 @@
+import os
 from abc import ABC
 from typing import List
 
 import numpy as np
+from dotenv import load_dotenv
 from floris.tools import FlorisInterface
 from mpi4py import MPI
+
+from src.ff_utils import create_ff_case
+
+# load environment variables from .env
+load_dotenv()
 
 YAW_TAG = 1
 PITCH_TAG = 2
@@ -74,15 +81,28 @@ class MPI_Interface(BaseInterface):
         num_turbines: int = 3,
         log_file: str = None,
         measure_map: dict = None,
+        comm: MPI.Comm = MPI.COMM_WORLD,
+        target_process_rank: int = None,
+        max_iter: int = 500,
     ):
         super(MPI_Interface, self).__init__()
 
         # Check communication channels
-        self._comm = MPI.COMM_WORLD
+        self._comm = comm
+        if target_process_rank is None:
+            rank = self._comm.Get_rank()
+            target_process_rank = 1 - rank
+        self._target_process_rank = target_process_rank
         self._buffer_size = buffer_size
         self._measurement_window = measurement_window
         num_measures = np.array([0], dtype=int)
-        self._comm.Recv(num_measures, source=0, tag=COM_TAG)
+        self._comm.Recv(num_measures, source=self._target_process_rank, tag=COM_TAG)
+        self._comm.Send(
+            buf=np.array([max_iter], dtype=int),
+            dest=self._target_process_rank,
+            tag=COM_TAG,
+        )
+        self._max_iter = max_iter
         self._num_measures = num_measures[0]
         print(
             f"Interface: will receive {self._num_measures} measures at every iteration"
@@ -96,6 +116,7 @@ class MPI_Interface(BaseInterface):
         self._current_yaw_command = np.zeros(num_turbines + 1, dtype=np.double)
         self._current_pitch_command = np.zeros(num_turbines + 1, dtype=np.double)
         self._current_torque_command = np.zeros(num_turbines + 1, dtype=np.double)
+        self._num_iter = 0
         self.current_measures = (
             np.zeros((self.num_turbines, self._num_measures)) * np.nan
         )
@@ -128,12 +149,26 @@ class MPI_Interface(BaseInterface):
             self._current_torque_command[1:] = torque.astype(np.double)
             self._current_torque_command[0] = 1.0
 
-        self._comm.Send(buf=self._current_yaw_command, dest=0, tag=YAW_TAG)
-        self._comm.Send(buf=self._current_pitch_command, dest=0, tag=PITCH_TAG)
-        self._comm.Send(buf=self._current_torque_command, dest=0, tag=TORQUE_TAG)
+        self._comm.Send(
+            buf=self._current_yaw_command, dest=self._target_process_rank, tag=YAW_TAG
+        )
+        self._comm.Send(
+            buf=self._current_pitch_command,
+            dest=self._target_process_rank,
+            tag=PITCH_TAG,
+        )
+        self._comm.Send(
+            buf=self._current_torque_command,
+            dest=self._target_process_rank,
+            tag=TORQUE_TAG,
+        )
         power, wind = self._wait_for_sim_output()
         self._power_buffers.add(power)
         self._wind_buffers.add(wind)
+
+        self._num_iter += 1
+        if self._num_iter == self._max_iter:
+            self._finalize_mpi_comm()
 
         if self._logging:
             with open(self._log_file, "a") as fp:
@@ -141,9 +176,18 @@ class MPI_Interface(BaseInterface):
                     f"Sent command YAW {self.get_yaw_command()} - "
                     f" PITCH {self.get_pitch_command()}"
                     f" TORQUE {self.get_torque_command()}\n"
-                    f"***********Received Power: {self.get_turbine_powers()}"
+                    f"***********Received Power: {power} - "
+                    f"Filtered Power: (window {self._measurement_window}):"
+                    f"{self.get_turbine_powers()} - "
                     f" Wind : {self.get_turbine_wind()}\n"
                 )
+
+        return self._num_iter == self._max_iter
+
+    def _finalize_mpi_comm(self):
+        # Disconnect from intercommunicator
+        if isinstance(self._comm, MPI.Intercomm):
+            self._comm.Disconnect()
 
     def get_yaw_command(self):
         if 1 - self._current_yaw_command[0]:
@@ -180,7 +224,7 @@ class MPI_Interface(BaseInterface):
     def _wait_for_sim_output(self):
         size_buffer = self.num_turbines * self._num_measures
         measures = np.zeros(size_buffer, dtype=np.double)
-        self._comm.Recv(measures, source=0, tag=MEASURES_TAG)
+        self._comm.Recv(measures, source=self._target_process_rank, tag=MEASURES_TAG)
         self._comm.Barrier()
         measures = measures.reshape((self.num_turbines, self._num_measures))
         # print(f"Received measures matrix from simulator: {measures}")
@@ -197,6 +241,45 @@ class MPI_Interface(BaseInterface):
 
     def reset(self):
         return None
+
+
+class FastFarmInterface(MPI_Interface):
+    def __init__(
+        self,
+        measurement_window: int = 30,
+        buffer_size: int = 50_000,
+        num_turbines: int = 3,
+        log_file: str = None,
+        measure_map: dict = None,
+        Cx: List = [0.0],
+        Cy: List = [0.0],
+        max_iter=int(1e4),
+        dt: float = 3.0,
+    ):
+        path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
+
+        simul_file = create_ff_case(
+            xWT=Cx,
+            yWT=Cy,
+            zWT=[0.0 for _ in Cx],
+            max_iter=max_iter,
+            dt=dt,
+        )
+
+        spawn_comm = MPI.COMM_SELF.Spawn(
+            path_to_fastfarm_exe, args=[simul_file], maxprocs=1
+        )
+
+        super(FastFarmInterface, self).__init__(
+            measurement_window=measurement_window,
+            buffer_size=buffer_size,
+            num_turbines=num_turbines,
+            log_file=log_file,
+            measure_map=measure_map,
+            comm=spawn_comm,
+            target_process_rank=0,
+            max_iter=max_iter,
+        )
 
 
 class FlorisInterfaceWrapper(BaseInterface):
