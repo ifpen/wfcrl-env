@@ -1,6 +1,6 @@
 n_turbines = 16
 
-Cx = [
+xcoords = [
     0.8915,
     0.8915,
     0.8915,
@@ -18,9 +18,9 @@ Cx = [
     4.4828,
     4.4819,
 ]
-Cx = [x * 1e3 for x in Cx]
+xcoords = [x * 1e3 for x in xcoords]
 
-Cy = [
+ycoords = [
     5.1693,
     3.7432,
     2.3172,
@@ -38,7 +38,7 @@ Cy = [
     2.3176,
     0.8921,
 ]
-Cy = [y * 1e3 for y in Cy]
+ycoords = [y * 1e3 for y in ycoords]
 
 dt = 20
 buffer_window = 120

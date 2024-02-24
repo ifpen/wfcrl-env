@@ -7,8 +7,8 @@ implementation for power optimization of an operating wind farm"
 
 n_turbines = 3
 
-Cx = [400.0, 1000.0, 1600.0]
-Cy = [400.0, 400.0, 400.0]
+xcoords = [400.0, 1000.0, 1600.0]
+ycoords = [400.0, 400.0, 400.0]
 
 dt = 20
 buffer_window = 120

@@ -4,10 +4,9 @@ from typing import List
 
 import numpy as np
 from dotenv import load_dotenv
-from floris.tools import FlorisInterface
 from mpi4py import MPI
 
-from src.ff_utils import create_ff_case
+from src.simul_utils import create_ff_case
 
 # load environment variables from .env
 load_dotenv()
@@ -251,17 +250,17 @@ class FastFarmInterface(MPI_Interface):
         num_turbines: int = 3,
         log_file: str = None,
         measure_map: dict = None,
-        Cx: List = [0.0],
-        Cy: List = [0.0],
+        xcoords: List = [0.0],
+        ycoords: List = [0.0],
         max_iter=int(1e4),
         dt: float = 3.0,
     ):
         path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
 
         simul_file = create_ff_case(
-            xWT=Cx,
-            yWT=Cy,
-            zWT=[0.0 for _ in Cx],
+            xcoords=xcoords,
+            ycoords=ycoords,
+            zcoords=[0.0 for _ in xcoords],
             max_iter=max_iter,
             dt=dt,
         )
@@ -282,18 +281,16 @@ class FastFarmInterface(MPI_Interface):
         )
 
 
-class FlorisInterfaceWrapper(BaseInterface):
+class FlorisInterface(BaseInterface):
     def __init__(
         self,
-        floris_interface: FlorisInterface,
         num_turbines: int = 3,
         log_file: str = None,
         measure_map: dict = None,
     ):
-        super(MPI_Interface, self).__init__()
+        super(FlorisInterface, self).__init__()
 
         self.num_turbines = num_turbines
-        self.fi = floris_interface
         self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
         self._logging = False
         if log_file is not None:
@@ -329,16 +326,6 @@ class FlorisInterfaceWrapper(BaseInterface):
         if 1 - self._current_yaw_command[0]:
             return None
         return np.degrees(self._current_yaw_command).copy()[1:]
-
-    def get_pitch_command(self):
-        if 1 - self._current_pitch_command[0]:
-            return None
-        return np.degrees(self._current_pitch_command).copy()[1:]
-
-    def get_torque_command(self):
-        if 1 - self._current_torque_command[0]:
-            return None
-        return self._current_torque_command.copy()[1:]
 
     def get_farm_power(self):
         powers = self.get_turbine_powers()

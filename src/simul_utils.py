@@ -22,7 +22,7 @@ def clean_folder(path):
             os.remove(subpath)
 
 
-def create_ff_case(xWT, yWT, zWT, max_iter, dt):
+def create_ff_case(xcoords, ycoords, zcoords, max_iter, dt):
     template_dir = TEMPLATE_DIR
     output_dir = CASE_DIR
     servoDir = SERVO_DIR
@@ -42,7 +42,7 @@ def create_ff_case(xWT, yWT, zWT, max_iter, dt):
         os.path.join(f"{template_dir}FarmInputs/", fst["EDFile"].replace('"', ""))
     )
     inflow = FASTInputFile(
-        os.path.join(f"{template_dir}FarmInputs/", fst["InflowFile"].replace('"', ""))
+        os.path.join(f"{template_dir}FarmInputs/", fstf["InflowFile"].replace('"', ""))
     )
 
     # --- Parameters for TurbSim Extent
@@ -72,8 +72,8 @@ def create_ff_case(xWT, yWT, zWT, max_iter, dt):
         BTS_filename,
         hubHeight,
         D,
-        xWT,
-        yWT,
+        xcoords,
+        ycoords,
         Cmeander=Cmeander,
         chord_max=chord_max,
         extent_X=extent_X_high,
@@ -83,7 +83,13 @@ def create_ff_case(xWT, yWT, zWT, max_iter, dt):
 
     # --- Write Fast Farm file with layout and Low and High res extent
     writeFastFarm(
-        outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=FFTS, OutListT1=out_list_sel
+        outputFSTF,
+        templateFSTF,
+        xcoords,
+        ycoords,
+        zcoords,
+        FFTS=FFTS,
+        OutListT1=out_list_sel,
     )
     print("Created FAST.Farm input file:", outputFSTF)
 

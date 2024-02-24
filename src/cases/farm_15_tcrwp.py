@@ -5,8 +5,8 @@ https://farmconners.readthedocs.io/en/latest/provided_data_sets.html
 
 n_turbines = 15
 
-Cx = [(i // 4) * 126 * 4 + int(i % 2 == 0) * 126 * 2 for i in range(15)]
-Cy = [-300 + (i % 4) * 126 * 4 for i in range(15)]
+xcoords = [(i // 4) * 126 * 4 + int(i % 2 == 0) * 126 * 2 for i in range(15)]
+ycoords = [-300 + (i % 4) * 126 * 4 for i in range(15)]
 
 dt = 20
 buffer_window = 120
