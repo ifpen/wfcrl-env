@@ -10,7 +10,7 @@ from mpi4py import MPI
 from src.simul_utils import create_ff_case, create_floris_case
 
 # load environment variables from .env
-load_dotenv()
+load_dotenv(override=True)
 
 # default measure indices in the com matrix
 
@@ -279,6 +279,7 @@ class FastFarmInterface(MPI_Interface):
 
         simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
 
+        print("Spawning process", path_to_fastfarm_exe, simul_file)
         spawn_comm = MPI.COMM_SELF.Spawn(
             path_to_fastfarm_exe, args=[simul_file], maxprocs=1
         )

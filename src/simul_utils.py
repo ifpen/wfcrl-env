@@ -116,7 +116,7 @@ def create_ff_case(xcoords, ycoords, max_iter, dt):
     servo = FASTInputFile(
         os.path.join(f"{template_dir}FarmInputs/", servo_file_name.replace('"', ""))
     )
-    servo_dll_filename = servo["DLL_FileName"]
+    servo_dll_filename = servo["DLL_FileName"].split("/")[-1]
     servo_dll_file = os.path.join(servoDir, servo_dll_filename.replace('"', ""))
 
     # Copy all other files
@@ -129,22 +129,26 @@ def create_ff_case(xcoords, ycoords, max_iter, dt):
         shutil.copy2(file, f"{output_dir}FarmInputs/")
     # Get needed .fst files
     out_fstf = FASTInputFile(outputFSTF)
+    out_fstf.write(outputFSTF)
     fst_files = [row[3].replace('"', "") for row in out_fstf["WindTurbines"]]
     for i, file in enumerate(fst_files):
         fst["ServoFile"] = servo_file_name.replace("1", str(i + 1))
         fst.write(os.path.join(f"{output_dir}FarmInputs/", file))
-        servo["DLL_FileName"] = servo_dll_filename.replace("1", str(i + 1))
+        servo_dll_filename_i = servo_dll_filename.replace("1", str(i + 1))
+        servo["DLL_FileName"] = f"../5MW_Baseline/ServoData/{servo_dll_filename_i}"
         servo.write(
             os.path.join(f"{output_dir}FarmInputs/", fst["ServoFile"].replace('"', ""))
         )
         shutil.copy2(
             servo_dll_file,
             os.path.join(
-                f"{output_dir}FarmInputs/", servo["DLL_FileName"].replace('"', "")
+                f"{output_dir}5MW_Baseline/ServoData/",
+                servo_dll_filename_i.replace('"', ""),
             ),
         )
 
     out_fstf["TMax"] = max_time
     out_fstf["DT_Low"] = dt
+    out_fstf["WrDisDT"] = out_fstf["DT_Low"]
     out_fstf.write(outputFSTF)
     return outputFSTF

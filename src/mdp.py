@@ -5,7 +5,7 @@ from typing import Dict, Iterable
 import numpy as np
 from gymnasium import spaces
 
-from src.interface import BaseInterface
+from src.interface import BaseInterface, MPI_Interface
 
 
 def clip_to_dict_space(element: dict, space: spaces.Dict):
@@ -53,6 +53,12 @@ class WindFarmMDP:
     ):
         interface_kwargs["num_turbines"] = num_turbines
         interface_kwargs["max_iter"] = horizon
+        if interface == MPI_Interface:
+            # MPI_Interface connects to an already running
+            # process so it does not accept
+            # simulation configuration
+            # Log warning here ?
+            del interface_kwargs["simul_kwargs"]
         self.interface = interface(**interface_kwargs)
         self.num_turbines = num_turbines
         self.continuous_control = continuous_control
