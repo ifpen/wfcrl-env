@@ -249,14 +249,15 @@ class MPI_Interface(BaseInterface):
         measures = measures.reshape((self.num_turbines, self._num_measures))
         # print(f"Received measures matrix from simulator: {measures}")
         speeds = measures[:, self.measure_map["wind_speed"]].flatten()
-        directions = measures[:, self.measure_map["power"]].flatten()
-        powers = measures[:, self.measure_map["wind_direction"]].flatten()
+        directions = measures[:, self.measure_map["wind_direction"]].flatten()
+        powers = measures[:, self.measure_map["power"]].flatten()
         upstream_point = np.argmax(speeds)
         wspeed = speeds[upstream_point]
         wdir = np.degrees(directions[upstream_point])
+        wdir = wdir - 90
         # Keep wind direction positive
         if wdir < 0:
-            wdir += 360 - 90
+            wdir = wdir + 360
         self.current_measures = measures
         return powers.astype(np.float32), np.array([wspeed, wdir], dtype=np.float32)
 

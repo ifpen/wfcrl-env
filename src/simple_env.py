@@ -19,6 +19,7 @@ class WindFarmEnv(gym.Env):
         interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = None,
         start_iter: int = 0,
+        max_num_steps: int = 500,
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
@@ -27,6 +28,7 @@ class WindFarmEnv(gym.Env):
             continuous_control=continuous_control,
             interface_kwargs=interface_kwargs,
             start_iter=start_iter,
+            horizon=start_iter + max_num_steps,
         )
         self.continuous_control = continuous_control
         self.action_space = self.mdp.action_space
@@ -39,7 +41,8 @@ class WindFarmEnv(gym.Env):
             self.reward_shaper = lambda x: x
 
     def reset(self):
-        pass
+        observation = copy.deepcopy(self._state)
+        return observation
 
     def step(self, actions: Dict):
         """
@@ -50,8 +53,10 @@ class WindFarmEnv(gym.Env):
         )
         reward = np.array([self.reward_shaper(powers.sum())])
         self._state = next_state
-        terminated = np.array(False)
-        truncated = np.array(False)
-        info = {"power": powers, "loads": loads}
+        terminated = False
+        truncated = truncated
+        info = {"power": powers}
+        if loads is not None:
+            info["load"] = loads
         observation = copy.deepcopy(self._state)
         return observation, reward, terminated, truncated, info
