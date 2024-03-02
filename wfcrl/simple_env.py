@@ -4,9 +4,9 @@ from typing import Dict
 import gymnasium as gym
 import numpy as np
 
-from src.interface import BaseInterface
-from src.mdp import WindFarmMDP
-from src.rewards import RewardShaper
+from wfcrl.interface import BaseInterface
+from wfcrl.mdp import WindFarmMDP
+from wfcrl.rewards import DoNothingReward, RewardShaper
 
 
 class WindFarmEnv(gym.Env):
@@ -17,7 +17,7 @@ class WindFarmEnv(gym.Env):
         controls: dict,
         continuous_control: bool = True,
         interface_kwargs: Dict = None,
-        reward_shaper: RewardShaper = None,
+        reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
@@ -35,12 +35,13 @@ class WindFarmEnv(gym.Env):
         self.observation_space = self.mdp.state_space
         self._state = self.mdp.start_state
         self.num_turbines = self.mdp.num_turbines
-        if reward_shaper is not None:
-            self.reward_shaper = reward_shaper
-        else:
-            self.reward_shaper = lambda x: x
+        self.max_num_steps = max_num_steps
+        self.reward_shaper = reward_shaper
 
-    def reset(self):
+    def reset(self, seed=None, options=None):
+        self.mdp.reset()
+        self._state = self.mdp.start_state
+        self.reward_shaper.reset()
         observation = copy.deepcopy(self._state)
         return observation
 
@@ -48,6 +49,8 @@ class WindFarmEnv(gym.Env):
         """
         action: dictionary of np.array of shape (n_turbines,)
         """
+        assert self._state is not None, "Call reset before `step`"
+
         next_state, powers, loads, truncated = self.mdp.take_action(
             self._state, actions
         )
@@ -60,3 +63,6 @@ class WindFarmEnv(gym.Env):
             info["load"] = loads
         observation = copy.deepcopy(self._state)
         return observation, reward, terminated, truncated, info
+
+    def close(self):
+        pass

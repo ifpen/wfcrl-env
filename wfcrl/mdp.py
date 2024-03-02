@@ -5,7 +5,7 @@ from typing import Dict, Iterable
 import numpy as np
 from gymnasium import spaces
 
-from src.interface import BaseInterface, MPI_Interface
+from wfcrl.interface import BaseInterface, MPI_Interface
 
 
 def clip_to_dict_space(element: dict, space: spaces.Dict):
@@ -63,6 +63,7 @@ class WindFarmMDP:
         self.num_turbines = num_turbines
         self.continuous_control = continuous_control
         self.horizon = horizon
+        self.start_iter = start_iter
 
         # Check validity of controls
         self._check_controls(controls)
@@ -101,15 +102,6 @@ class WindFarmMDP:
                 }
             )
 
-        # Take first steps in the interface until start_iter
-        for t in range(start_iter + 1):
-            self.interface.update_command()
-        # Retrieve state at start_iter
-        start_state = OrderedDict(
-            {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
-        )
-        print(f"Start state {start_state}")
-
         # Setup state space
         state_space_dict = {}
         bound_array = np.ones(num_turbines, dtype=np.float32)
@@ -134,8 +126,20 @@ class WindFarmMDP:
                 shape=low.shape,
             )
         self.state_space = spaces.Dict(state_space_dict)
-        self.start_state = clip_to_dict_space(start_state, self.state_space)
-        print(f"Init MDP with start state {self.start_state}")
+        self.start_state = None
+
+        # Take first steps in the interface until start_iter
+        # for t in range(start_iter + 1):
+        #     self.interface.update_command()
+        # # Retrieve state at start_iter
+        # start_state = OrderedDict(
+        #     {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
+        # )
+        # # print(f"Start state {start_state}")
+
+        # self.
+        # self.start_state = clip_to_dict_space(start_state, self.state_space)
+        # print(f"Init MDP with start state {self.start_state}")
 
     def get_state_powers(self):
         return self.interface.get_turbine_powers()
@@ -204,6 +208,16 @@ class WindFarmMDP:
                     f"State attribute {attr} must be of shape (NUM_TURBINES,),"
                     f"but received {value.shape}. NUM_TURBINES = {self.num_turbines})"
                 )
+
+    def reset(self):
+        self.interface.reset()
+        for _ in range(self.start_iter + 1):
+            self.interface.update_command()
+        start_state = OrderedDict(
+            {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
+        )
+        self.start_state = clip_to_dict_space(start_state, self.state_space)
+        return self.start_state
 
     def step_interface(self, state: Dict):
         step_dict = {}

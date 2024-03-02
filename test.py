@@ -1,7 +1,7 @@
 import numpy as np
 from mpi4py import MPI
 
-from src.interface import MPI_Interface
+from wfcrl.interface import MPI_Interface
 
 
 def test_routine():

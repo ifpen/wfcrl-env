@@ -9,6 +9,18 @@ class RewardShaper(ABC):
     def update(self):
         pass
 
+    def reset(self):
+        pass
+
+
+class DoNothingReward(RewardShaper):
+    """
+    Dummy class. Returns the same reward.
+    """
+
+    def __call__(self, reward):
+        return reward
+
 
 class ReferencePercentage(RewardShaper):
     def __init__(self, reference: float):
@@ -29,3 +41,6 @@ class StepPercentage(RewardShaper):
             shaped_reward = (reward - self.reference) / self.reference
         self.reference = reward
         return shaped_reward
+
+    def reset(self, reference: float = 0.0):
+        self.reference = reference

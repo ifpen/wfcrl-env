@@ -1,10 +1,10 @@
 import numpy as np
 
-from src.interface import MPI_Interface
-from src.mdp import WindFarmMDP
-from src.multiagent_env import MAWindFarmEnv
-from src.rewards import StepPercentage
-from src.simple_env import WindFarmEnv
+from wfcrl.interface import MPI_Interface
+from wfcrl.mdp import WindFarmMDP
+from wfcrl.multiagent_env import MAWindFarmEnv
+from wfcrl.rewards import StepPercentage
+from wfcrl.simple_env import WindFarmEnv
 
 interface_params = {
     "measurement_window": 10,

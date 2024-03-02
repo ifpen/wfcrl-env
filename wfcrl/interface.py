@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from floris import tools
 from mpi4py import MPI
 
-from src.simul_utils import create_ff_case, create_floris_case
+from wfcrl.simul_utils import create_ff_case, create_floris_case
 
 # load environment variables from .env
 load_dotenv(override=True)
@@ -65,6 +65,10 @@ class PowerBuffer:
         start = self.pos - window if self.pos > window else 0
         return self._agg_fn(self._buffer[start : self.pos + 1, :], 0)
 
+    def empty(self):
+        self._buffer[:] = 0.0
+        self.pos = -1
+
 
 class MPI_Interface(BaseInterface):
     CONTROL_SET = ["yaw", "pitch", "torque"]
@@ -97,7 +101,7 @@ class MPI_Interface(BaseInterface):
         target_process_rank: int = None,
         max_iter: int = 500,
     ):
-        super(MPI_Interface, self).__init__()
+        super().__init__()
 
         # Check communication channels
         self._comm = comm
@@ -107,21 +111,9 @@ class MPI_Interface(BaseInterface):
         self._target_process_rank = target_process_rank
         self._buffer_size = buffer_size
         self._measurement_window = measurement_window
-        num_measures = np.array([0], dtype=int)
-        self._comm.Recv(
-            num_measures, source=self._target_process_rank, tag=self.COM_TAG
-        )
-        self._comm.Send(
-            buf=np.array([max_iter], dtype=int),
-            dest=self._target_process_rank,
-            tag=self.COM_TAG,
-        )
+        self._num_measures = None
+        self.current_measures = None
         self._max_iter = max_iter
-        self._num_measures = num_measures[0]
-        print(
-            f"Interface: will receive {self._num_measures} measures at every iteration"
-        )
-
         # Maintain mapping with measure name -> ID in measure matrix
         self.measure_map = (
             self.DEFAULT_MEASURE_MAP if measure_map is None else measure_map
@@ -133,9 +125,7 @@ class MPI_Interface(BaseInterface):
         self._current_pitch_command = np.zeros(num_turbines + 1, dtype=np.double)
         self._current_torque_command = np.zeros(num_turbines + 1, dtype=np.double)
         self._num_iter = 0
-        self.current_measures = (
-            np.zeros((self.num_turbines, self._num_measures)) * np.nan
-        )
+
         self._logging = False
         if log_file is not None:
             self._log_file = log_file
@@ -155,6 +145,7 @@ class MPI_Interface(BaseInterface):
         pitch: np.ndarray = None,
         torque: np.ndarray = None,
     ):
+        assert self.current_measures is not None, "Call reset before `update_command`"
         if yaw is not None:
             self._current_yaw_command[1:] = np.radians(yaw.astype(np.double))
             self._current_yaw_command[0] = 1.0
@@ -201,6 +192,31 @@ class MPI_Interface(BaseInterface):
                 )
 
         return self._num_iter == self._max_iter
+
+    def reset(self):
+        self._num_iter = 0
+        self._current_yaw_command = np.zeros(self.num_turbines + 1, dtype=np.double)
+        self._current_pitch_command = np.zeros(self.num_turbines + 1, dtype=np.double)
+        self._current_torque_command = np.zeros(self.num_turbines + 1, dtype=np.double)
+        self._power_buffers.empty()
+        self._wind_buffers.empty()
+
+        num_measures = np.array([0], dtype=int)
+        self._comm.Recv(
+            num_measures, source=self._target_process_rank, tag=self.COM_TAG
+        )
+        self._comm.Send(
+            buf=np.array([self._max_iter], dtype=int),
+            dest=self._target_process_rank,
+            tag=self.COM_TAG,
+        )
+        self._num_measures = num_measures[0]
+        print(
+            f"Interface: will receive {self._num_measures} measures at every iteration"
+        )
+        self.current_measures = (
+            np.zeros((self.num_turbines, self._num_measures)) * np.nan
+        )
 
     def _finalize_mpi_comm(self):
         # Disconnect from intercommunicator
@@ -261,9 +277,6 @@ class MPI_Interface(BaseInterface):
         self.current_measures = measures
         return powers.astype(np.float32), np.array([wspeed, wdir], dtype=np.float32)
 
-    def reset(self):
-        return None
-
 
 class FastFarmInterface(MPI_Interface):
     def __init__(
@@ -284,8 +297,9 @@ class FastFarmInterface(MPI_Interface):
         spawn_comm = MPI.COMM_SELF.Spawn(
             path_to_fastfarm_exe, args=[simul_file], maxprocs=1
         )
+        self._simul_file = simul_file
 
-        super(FastFarmInterface, self).__init__(
+        super().__init__(
             measurement_window=measurement_window,
             buffer_size=buffer_size,
             num_turbines=num_turbines,
@@ -314,7 +328,7 @@ class FlorisInterface(BaseInterface):
         max_iter: int = int(1e4),
         log_file: str = None,
     ):
-        super(FlorisInterface, self).__init__()
+        super().__init__()
 
         simul_file = create_floris_case(**simul_kwargs)
         self.num_turbines = num_turbines
@@ -358,6 +372,13 @@ class FlorisInterface(BaseInterface):
                 )
         return self._num_iter == self._max_iter
 
+    def reset(self):
+        self._num_iter = 0
+        self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
+        self.current_measures = (
+            np.zeros((self.num_turbines, len(self.measure_map) - 1)) * np.nan
+        )
+
     def get_yaw_command(self):
         return self._current_yaw_command.copy().flatten()
 
@@ -377,82 +398,3 @@ class FlorisInterface(BaseInterface):
         if measure == "wind_measurements":
             return self.get_turbine_wind()
         return self.current_measures[:, self.measure_map[measure]]
-
-
-# class FlorisInterface(BaseInterface):
-#     def __init__(self, config, layout, wind_series=None):
-#         super(FlorisInterface, self).__init__(config)
-#         self._layout = layout
-#         self.num_turbines = len(layout[0])
-#         self.fi = wfct.floris_interface.FlorisInterface(self._config_file)
-#         self._wind_series_pnt = 0
-#         self._wind_series = None
-#         if wind_series is not None:
-#             self._wind_series = pd.read_csv(wind_series, header=None)
-#             assert self._wind_series.shape[1] == 2  # columns: speed, direction
-
-#     @property
-#     def wind_speed(self):
-#         return self.fi.floris.farm.wind_map.input_speed[0]
-
-#     @property
-#     def wind_dir(self):
-#         return self.fi.floris.farm.wind_map.input_direction[0]
-
-#     def next_wind(self):
-#         if self._wind_series is not None:
-#             speed, direction = self._wind_series.iloc[self._wind_series_pnt]
-#             self._wind_series_pnt += 1
-#             if self._wind_series_pnt >= self._wind_series.shape[0]:
-#                 self._wind_series_pnt = 0
-#             self.update_wind(speed, direction)
-#         else:
-#             speed, direction = self.wind_speed, self.wind_dir
-#         return speed, direction
-
-#     def update_wind(self, speed=None, direction=None):
-#         speed = self.wind_speed if speed is None else speed
-#         direction = self.wind_dir if direction is None else direction
-#         self.fi.reinitialize_flow_field(wind_speed=speed, wind_direction=direction)
-#         self.fi.calculate_wake()
-
-#     def set_yaw_angles(self, yaws: List, sync: bool = True):
-#         # Translate fixed yaw angles (wrt to the west) into relative FLORIS yaw angles
-#         # fixed = relative + greedy
-#         yaws_relative = [y - self.get_greedy_yaw() for y in yaws]
-#         self.fi.floris.farm.set_yaw_angles(yaws_relative)
-#         if sync:
-#             self.fi.calculate_wake()
-
-#     def get_yaw_angles(self):
-#         yaws_relative = self.fi.get_yaw_angles()
-#         # Convert relative yaw angles into fixed (wrt to the west)
-#         yaws = [less_than_180(y + self.get_greedy_yaw()) for y in yaws_relative]
-#         return yaws
-
-#     def get_farm_power(self):
-#         return self.fi.get_farm_power()
-
-#     def get_turbine_powers(self) -> List:
-#         return self.fi.get_turbine_power()
-
-#     def reset_interface(
-#         self,
-#         yaws=None,
-#         wind_direction=None,
-#         wind_speed=None,
-#         wind_shear=None,
-#         turbulence_intensity=None,
-#     ):
-#         self.fi.reinitialize_flow_field(
-#             layout_array=self._layout,
-#             wind_direction=wind_direction,
-#             wind_speed=wind_speed,
-#             wind_shear=wind_shear,
-#             turbulence_intensity=turbulence_intensity,
-#         )
-#         if yaws is not None:
-#             self.set_yaw_angles(yaws)
-#         self.fi.calculate_wake()
-#         self._wind_series_pnt = 0
-#         self.next_wind()

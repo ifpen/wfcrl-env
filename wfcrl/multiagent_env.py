@@ -6,9 +6,9 @@ from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector
 
-from src.interface import BaseInterface
-from src.mdp import WindFarmMDP
-from src.rewards import RewardShaper
+from wfcrl.interface import BaseInterface
+from wfcrl.mdp import WindFarmMDP
+from wfcrl.rewards import DoNothingReward, RewardShaper
 
 
 class MAWindFarmEnv(AECEnv):
@@ -21,7 +21,7 @@ class MAWindFarmEnv(AECEnv):
         controls: dict,
         continuous_control: bool = True,
         interface_kwargs: Dict = None,
-        reward_shaper: RewardShaper = None,
+        reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
@@ -36,12 +36,9 @@ class MAWindFarmEnv(AECEnv):
         )
         self.continuous_control = continuous_control
         self.max_num_steps = max_num_steps
-        self._state = self.mdp.start_state
+        self._state = None
         self.num_turbines = self.mdp.num_turbines
-        if reward_shaper is not None:
-            self.reward_shaper = reward_shaper
-        else:
-            self.reward_shaper = lambda x: x
+        self.reward_shaper = reward_shaper
 
         # Init AEC properties
         self.possible_agents = [
@@ -112,7 +109,7 @@ class MAWindFarmEnv(AECEnv):
                 agent_state[key] = partial_state[self.agent_name_mapping[agent]]
         return agent_state
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, options=None):
         """
         Reset initializes the following attributes
         - agents
@@ -124,10 +121,13 @@ class MAWindFarmEnv(AECEnv):
         And must set up the environment so that render(), step(), and observe()
         can be called without issues.
         """
+        self.mdp.reset()
+        self._state = self.mdp.start_state
+        self.reward_shaper.reset()
 
         self.agents = self.possible_agents[:]
         self._num_steps = {agent: 0 for agent in self.agents}
-        self.rewards = {agent: 0 for agent in self.agents}
+        self.rewards = {agent: np.array([0.0]) for agent in self.agents}
         self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
@@ -152,6 +152,8 @@ class MAWindFarmEnv(AECEnv):
         - agent_selection (to the next agent)
         And any internal state used by observe() or render()
         """
+
+        assert self._state is not None, "Call reset before `step`"
 
         agent = self.agent_selection
         self._num_steps[agent] += 1
@@ -199,3 +201,6 @@ class MAWindFarmEnv(AECEnv):
         self.agent_selection = self._agent_selector.next()
         # Adds .rewards to ._cumulative_rewards
         self._accumulate_rewards()
+
+    def close(self):
+        pass
