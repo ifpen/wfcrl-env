@@ -193,6 +193,9 @@ class MPI_Interface(BaseInterface):
 
         return self._num_iter == self._max_iter
 
+    def set_comm(self, comm):
+        self._comm = comm
+
     def reset(self):
         self._num_iter = 0
         self._current_yaw_command = np.zeros(self.num_turbines + 1, dtype=np.double)
@@ -289,26 +292,26 @@ class FastFarmInterface(MPI_Interface):
         measure_map: dict = None,
         max_iter: int = int(1e4),
     ):
-        path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
-
-        simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
-
-        print("Spawning process", path_to_fastfarm_exe, simul_file)
-        spawn_comm = MPI.COMM_SELF.Spawn(
-            path_to_fastfarm_exe, args=[simul_file], maxprocs=1
-        )
-        self._simul_file = simul_file
-
+        self._path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
+        self._simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
         super().__init__(
             measurement_window=measurement_window,
             buffer_size=buffer_size,
             num_turbines=num_turbines,
             log_file=log_file,
             measure_map=measure_map,
-            comm=spawn_comm,
+            comm=None,
             target_process_rank=0,
             max_iter=max_iter,
         )
+
+    def reset(self):
+        print("Spawning process", self._path_to_fastfarm_exe, self._simul_file)
+        spawn_comm = MPI.COMM_SELF.Spawn(
+            self._path_to_fastfarm_exe, args=[self._simul_file], maxprocs=1
+        )
+        self.set_comm(spawn_comm)
+        super().reset()
 
 
 class FlorisInterface(BaseInterface):
