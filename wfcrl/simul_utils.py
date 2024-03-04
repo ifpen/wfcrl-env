@@ -16,10 +16,8 @@ SERVO_DIR = "simulators/{}/servo_dll/"
 
 
 def clean_folder(path):
-    for subpath in glob.glob(path):
-        if os.path.isdir(subpath):
-            shutil.rmtree(subpath)
-        else:
+    for subpath in glob.glob(path, recursive=True):
+        if not os.path.isdir(subpath):
             os.remove(subpath)
 
 
@@ -44,7 +42,8 @@ def create_ff_case(xcoords, ycoords, max_iter, dt):
     output_dir = CASE_DIR.format("fastfarm")
     servoDir = SERVO_DIR.format("fastfarm")
     os.makedirs(f"{output_dir}FarmInputs/", exist_ok=True)
-    os.makedirs(f"{output_dir}5MW_Baseline/", exist_ok=True)
+    os.makedirs(f"{output_dir}5MW_Baseline/ServoData/", exist_ok=True)
+    os.makedirs(f"{output_dir}5MW_Baseline/Airfoils/", exist_ok=True)
     clean_folder(f"{output_dir}FarmInputs/*")
     clean_folder(f"{output_dir}5MW_Baseline/*")
     templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
