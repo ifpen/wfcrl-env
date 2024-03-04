@@ -1,6 +1,19 @@
 from dataclasses import dataclass
 
 
+def repr(self):
+    repr = "Wind farm simulation configuration \n"
+    repr = f"{self.n_turbines} turbines \n"
+    for arg, val in self.interface_kwargs.items():
+        if arg[:2] != "__":
+            if isinstance(val, dict):
+                for name, param in val.items():
+                    repr += f"\t{name}: {param}\n"
+            else:
+                repr += f"{arg}: {val}\n"
+    return repr
+
+
 @dataclass
 class DefaultControl:
     yaw = (-20, 20, 5)
@@ -26,7 +39,7 @@ class Farm3Fastfarm:
     }
 
 
-@dataclass
+@dataclass()
 class Farm6Fastfarm:
     """
     2 x 3 Layout.
@@ -49,6 +62,9 @@ class Farm6Fastfarm:
     }
     interface_kwargs["log_file"] = "log.txt"
 
+    def __repr__(self):
+        return repr(self)
+
 
 @dataclass
 class Farm3Floris:
@@ -69,6 +85,9 @@ class Farm3Floris:
     interface_kwargs = {}
     simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "direction": 270}
     interface_kwargs["simul_kwargs"] = simul_kwargs
+
+    def __repr__(self):
+        return repr(self)
 
 
 @dataclass
@@ -93,6 +112,9 @@ class Farm6Floris:
         "simul_kwargs": simul_kwargs,
     }
     interface_kwargs["log_file"] = "log.txt"
+
+    def __repr__(self):
+        return repr(self)
 
 
 @dataclass
@@ -119,6 +141,9 @@ class Farm16TCRWPFastfarm:
         "simul_kwargs": simul_kwargs,
     }
 
+    def __repr__(self):
+        return repr(self)
+
 
 @dataclass
 class Farm16TCRWPFloris:
@@ -141,6 +166,9 @@ class Farm16TCRWPFloris:
     interface_kwargs = {}
     simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "direction": 270}
     interface_kwargs["simul_kwargs"] = simul_kwargs
+
+    def __repr__(self):
+        return repr(self)
 
 
 @dataclass
@@ -167,6 +195,9 @@ class FarmAblaincourtFastfarm:
         "simul_kwargs": simul_kwargs,
     }
 
+    def __repr__(self):
+        return repr(self)
+
 
 @dataclass
 class FarmAblaincourtFloris:
@@ -190,6 +221,9 @@ class FarmAblaincourtFloris:
     simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "direction": 270}
     interface_kwargs["simul_kwargs"] = simul_kwargs
 
+    def __repr__(self):
+        return repr(self)
+
 
 @dataclass
 class FarmRowFastfarm:
@@ -203,10 +237,10 @@ class FarmRowFastfarm:
     xcoords = None
     ycoords = None
 
-
-    def get_xcoords(n_turbines): 
+    def get_xcoords(n_turbines):
         return [i * 504.0 for i in range(n_turbines)]
-    def get_ycoords(n_turbines): 
+
+    def get_ycoords(n_turbines):
         return [0.0 for _ in range(n_turbines)]
 
     dt = 3
@@ -218,6 +252,9 @@ class FarmRowFastfarm:
         "measurement_window": int(buffer_window / dt),
         "simul_kwargs": simul_kwargs,
     }
+
+    def __repr__(self):
+        return repr(self)
 
 
 @dataclass
@@ -232,9 +269,10 @@ class FarmRowFloris:
     xcoords = None
     ycoords = None
 
-    def get_xcoords(n_turbines): 
+    def get_xcoords(n_turbines):
         return [400 + i * 600 for i in range(n_turbines)]
-    def get_ycoords(n_turbines): 
+
+    def get_ycoords(n_turbines):
         return [400.0 for _ in range(n_turbines)]
 
     dt = 1
@@ -244,6 +282,9 @@ class FarmRowFloris:
     interface_kwargs = {}
     simul_kwargs = {"xcoords": xcoords, "ycoords": ycoords, "direction": 270}
     interface_kwargs["simul_kwargs"] = simul_kwargs
+
+    def __repr__(self):
+        return repr(self)
 
 
 named_cases_dictionary = {
