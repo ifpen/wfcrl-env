@@ -43,6 +43,8 @@ def create_ff_case(xcoords, ycoords, max_iter, dt):
     template_dir = TEMPLATE_DIR.format("fastfarm")
     output_dir = CASE_DIR.format("fastfarm")
     servoDir = SERVO_DIR.format("fastfarm")
+    os.makedirs(f"{output_dir}FarmInputs/", exist_ok=True)
+    os.makedirs(f"{output_dir}5MW_Baseline/", exist_ok=True)
     clean_folder(f"{output_dir}FarmInputs/*")
     clean_folder(f"{output_dir}5MW_Baseline/*")
     templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
