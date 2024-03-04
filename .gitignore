@@ -7,5 +7,4 @@ src/cases/__pycache__/*
 *.sum
 *.ech
 *.out
-*.bts
 *.pyc
