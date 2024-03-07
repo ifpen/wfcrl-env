@@ -37,6 +37,7 @@ class WindFarmEnv(gym.Env):
         self.num_turbines = self.mdp.num_turbines
         self.max_num_steps = max_num_steps
         self.reward_shaper = reward_shaper
+        self.controls = controls
 
     def reset(self, seed=None, options=None):
         self.mdp.reset()

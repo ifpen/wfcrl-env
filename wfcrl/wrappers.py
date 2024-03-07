@@ -19,6 +19,7 @@ class AECLogWrapper(BaseWrapper):
         self._state = self.env.mdp.start_state
         self.num_turbines = self.env.mdp.num_turbines
         self.mdp = self.env.mdp
+        self.controls = self.env.controls
 
     def last(self):
         agent = self.env.agent_selection
@@ -52,6 +53,7 @@ class LogWrapper(Wrapper):
         self._state = self.env.mdp.start_state
         self.num_turbines = self.env.mdp.num_turbines
         self.mdp = self.env.mdp
+        self.controls = self.env.controls
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(action)

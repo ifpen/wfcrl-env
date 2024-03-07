@@ -23,15 +23,33 @@ MSMPI_LIB64=C:\Program Files (x86)\Microsoft SDKs\MPI\Lib\x64\
 FAST_FARM_EXECUTABLE = simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe
 ```
 
-### Usage
+3. In the virtual environment of your choice:
+```
+pip install -r requirements.txt
+```
 
-An example can be seen in the `interface.ipynb` notebook. At every iteration, the FAST.Farm interace retrieves 12 measures per turbine:
+## Usage
+
+### Interfacing with FAST.Farm
+
+A simple tutorial to start a simulation with the FastFarm interface is available in the notebook `interface.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
+
+At every iteration, the FAST.Farm interace retrieves 12 measures per turbine:
 - 2 wind measurements: wind velocity and direction at the entrance of the farm
 - The current output power of the turbine
 - The yaw of the turbine
 - The pitch of the turbine
 - The torque of the turbine
 - 6 measures of blade loads
+
+### Using the RL environments
+An example of a test case using the multi-agent environment with a simple step policy is given in `example.py`. It can be launched with
+
+```
+mpiexec -n 1 python example.py
+```
+
+A more detailed introduction is available in the `demo.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
 
 ## Running Examples Notebook
 

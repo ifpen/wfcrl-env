@@ -39,6 +39,7 @@ class MAWindFarmEnv(AECEnv):
         self._state = None
         self.num_turbines = self.mdp.num_turbines
         self.reward_shaper = reward_shaper
+        self.controls = controls
 
         # Init AEC properties
         self.possible_agents = [
@@ -160,6 +161,12 @@ class MAWindFarmEnv(AECEnv):
 
         # TODO: allow for different control for each agent
         # For now, every local action must send a command for ALL controls
+        for control in action:
+            if control not in self.mdp.controls:
+                raise ValueError(
+                    f"Control `{control}` for agent {agent} is not activated."
+                    f" List of activated controls: {list(self.mdp.controls.keys())}"
+                )
         if any([not (control in action) for control in self.mdp.controls]):
             raise ValueError(
                 f"Action {action} for agent {agent} is incomplete."
