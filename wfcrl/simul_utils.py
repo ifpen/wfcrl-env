@@ -37,6 +37,13 @@ def create_floris_case(xcoords, ycoords, direction=None, speed=None):
     return f"{output_dir}case.yaml"
 
 
+def read_simul_info(fstsf_file):
+    fstf = FASTInputFile(fstsf_file)
+    num_iter = fstf["TMax"] // fstf["DT_Low"]
+    num_turbines = fstf["NumTurbines"]
+    return num_turbines, num_iter
+
+
 def create_ff_case(xcoords, ycoords, max_iter, dt):
     template_dir = TEMPLATE_DIR.format("fastfarm")
     output_dir = CASE_DIR.format("fastfarm")

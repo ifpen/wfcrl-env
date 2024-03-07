@@ -7,7 +7,7 @@
 This assumes that you already have compiled FAST.Farm binaries. If not you can download them [here](https://github.com/OpenFAST/openfast/releases/tag/v3.5.1). This interface has been tested with FAST.Farm 3.5.1.
 
 1. Download **BOTH** Windows MPI setup (.exe) and MPI SDK (.msi) and install them from (https://www.microsoft.com/en-us/download/details.aspx?id=100593)
-You can check your installation by entering : `set MSMPI` from `C:\Windows\System32` in the command prompt. You should obtain the following:
+You can check your installation by enBtering : `set MSMPI` from `C:\Windows\System32` in the command prompt. You should obtain the following:
 
 ```
 MSMPI_BENCHMARKS=C:\Program Files\Microsoft MPI\Benchmarks\
@@ -17,13 +17,7 @@ MSMPI_LIB32=C:\Program Files (x86)\Microsoft SDKs\MPI\Lib\x86\
 MSMPI_LIB64=C:\Program Files (x86)\Microsoft SDKs\MPI\Lib\x64\
 ```
 
-2. Create a `.env` file at the root of the folder to store the path towards the FAST.Farm executable. For example:
-
-```
-FAST_FARM_EXECUTABLE = simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe
-```
-
-3. In the virtual environment of your choice:
+2. In the virtual environment of your choice:
 ```
 pip install -r requirements.txt
 ```
@@ -33,6 +27,39 @@ pip install -r requirements.txt
 ### Interfacing with FAST.Farm
 
 A simple tutorial to start a simulation with the FastFarm interface is available in the notebook `interface.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
+
+**Creating an interface from a WFCRL case:**
+
+```
+from wfcrl.environments import data_cases as cases
+from wfcrl.interface import FastFarmInterface
+
+config = cases.Farm6Fastfarm()
+interface = FastFarmInterface(
+    num_turbines=config.n_turbines,
+    max_iter=10,
+    **config.interface_kwargs
+)
+```
+
+By default, your FAST.Farm executable is assumed to be located in `simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe`. If not, you can also pass it to the interface:
+
+```
+interface = FastFarmInterface(
+    num_turbines=config.n_turbines,
+    max_iter=10,
+    fast_farm_executable=path_to_exe,
+    **config.interface_kwargs
+)
+```
+
+
+**Creating an interface from existing configuration files:**
+Alternatively, if you already have your simulation fils ready, you can just point towards the `.fstf` file:
+```
+ff_interface = FastFarmInterface(fstf_file=paht_to_fstf)
+```
+
 
 At every iteration, the FAST.Farm interace retrieves 12 measures per turbine:
 - 2 wind measurements: wind velocity and direction at the entrance of the farm

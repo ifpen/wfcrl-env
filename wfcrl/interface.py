@@ -1,18 +1,11 @@
-import os
 from abc import ABC
 from typing import List
 
 import numpy as np
-from dotenv import load_dotenv
 from floris import tools
 from mpi4py import MPI
 
-from wfcrl.simul_utils import create_ff_case, create_floris_case
-
-# load environment variables from .env
-load_dotenv(override=True)
-
-# default measure indices in the com matrix
+from wfcrl.simul_utils import create_ff_case, create_floris_case, read_simul_info
 
 
 class BaseInterface(ABC):
@@ -113,7 +106,7 @@ class MPI_Interface(BaseInterface):
         self._measurement_window = measurement_window
         self._num_measures = None
         self.current_measures = None
-        self._max_iter = max_iter
+        self.max_iter = max_iter
         # Maintain mapping with measure name -> ID in measure matrix
         self.measure_map = (
             self.DEFAULT_MEASURE_MAP if measure_map is None else measure_map
@@ -176,7 +169,7 @@ class MPI_Interface(BaseInterface):
         self._wind_buffers.add(wind)
 
         self._num_iter += 1
-        if self._num_iter == self._max_iter:
+        if self._num_iter == self.max_iter:
             self._finalize_mpi_comm()
 
         if self._logging:
@@ -191,7 +184,7 @@ class MPI_Interface(BaseInterface):
                     f" Wind : {self.get_turbine_wind()}\n"
                 )
 
-        return self._num_iter == self._max_iter
+        return self._num_iter == self.max_iter
 
     def set_comm(self, comm):
         self._comm = comm
@@ -209,7 +202,7 @@ class MPI_Interface(BaseInterface):
             num_measures, source=self._target_process_rank, tag=self.COM_TAG
         )
         self._comm.Send(
-            buf=np.array([self._max_iter], dtype=int),
+            buf=np.array([self.max_iter], dtype=int),
             dest=self._target_process_rank,
             tag=self.COM_TAG,
         )
@@ -282,18 +275,36 @@ class MPI_Interface(BaseInterface):
 
 
 class FastFarmInterface(MPI_Interface):
+    default_exe_path = "simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe"
+
     def __init__(
         self,
-        num_turbines: int,
-        simul_kwargs: dict,
+        num_turbines: int = None,
+        simul_kwargs: dict = None,
         measurement_window: int = 30,
         buffer_size: int = 50_000,
         log_file: str = None,
         measure_map: dict = None,
         max_iter: int = int(1e4),
+        fstf_file: str = None,
+        fast_farm_executable: str = default_exe_path,
     ):
-        self._path_to_fastfarm_exe = os.getenv("FAST_FARM_EXECUTABLE")
-        self._simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
+        self._path_to_fastfarm_exe = fast_farm_executable
+        if fstf_file is not None:
+            print(
+                f"Simulation will be started from fstf file {fstf_file}"
+                f" All other arguments will be ignored."
+            )
+            num_turbines, max_iter = read_simul_info(fstf_file)
+            self._simul_file = fstf_file
+        else:
+            if (num_turbines is None) or (simul_kwargs is None):
+                raise ValueError(
+                    "`FastFarmInterface` needs either a path towards"
+                    " a fstf file or the `num_turbines` and `simul_kwargs` arguments"
+                )
+            self._simul_file = create_ff_case(max_iter=max_iter, **simul_kwargs)
+
         super().__init__(
             measurement_window=measurement_window,
             buffer_size=buffer_size,
@@ -343,7 +354,7 @@ class FlorisInterface(BaseInterface):
             np.zeros((self.num_turbines, len(self.measure_map) - 1)) * np.nan
         )
         self._num_iter = 0
-        self._max_iter = max_iter
+        self.max_iter = max_iter
         self._logging = False
         if log_file is not None:
             self._log_file = log_file
@@ -373,7 +384,7 @@ class FlorisInterface(BaseInterface):
                     f"***********Received Power: {self.get_turbine_powers()}"
                     f" Wind : {self.get_turbine_wind()}\n"
                 )
-        return self._num_iter == self._max_iter
+        return self._num_iter == self.max_iter
 
     def reset(self):
         self._num_iter = 0

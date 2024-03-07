@@ -353,7 +353,7 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
     to_SC(2) = avrSWAP(15) !measured electrical power
     to_SC(3) = avrSWAP(24) + avrSWAP(37)!(wind direction from North)  = measured yaw error: + (nacelle angle from North)
     to_SC(4) = YawAngle   ! Send measured yaw angle to supercontroller
-    to_SC(5) = avrSWAP(5) ! Send measured Blade 1 Pitch angle to supercontroller
+    to_SC(5) = avrSWAP(4) ! Send measured Blade 1 Pitch angle to supercontroller
     to_SC(6) = avrSWAP(23) ! Send measured generator torque to supercontroller
     ! Send load measures
     to_SC(7) = avrSWAP(30)
