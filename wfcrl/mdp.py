@@ -58,8 +58,8 @@ class WindFarmMDP:
             # process so it does not accept
             # simulation configuration
             # Log warning here ?
-            del interface_kwargs["simul_kwargs"]
-        self.interface = interface(**interface_kwargs)
+            del interface_kwargs["simul_params"]
+        self.interface = interface.from_case(**interface_kwargs)
         self.num_turbines = num_turbines
         self.continuous_control = continuous_control
         self.horizon = horizon
@@ -142,7 +142,7 @@ class WindFarmMDP:
         # print(f"Init MDP with start state {self.start_state}")
 
     def get_state_powers(self):
-        return self.interface.get_turbine_powers()
+        return self.interface.avg_powers()
 
     def _cast_dict_array(self, state):
         state_cast = {}
@@ -210,7 +210,7 @@ class WindFarmMDP:
                 )
 
     def reset(self):
-        self.interface.reset()
+        self.interface.init()
         for _ in range(self.start_iter + 1):
             self.interface.update_command()
         start_state = OrderedDict(
@@ -224,7 +224,7 @@ class WindFarmMDP:
         for control in self.controls:
             step_dict[control] = state[control]
         done = self.interface.update_command(**step_dict)
-        powers = self.interface.get_turbine_powers()
+        powers = self.get_state_powers()
         for measure in self.measures:
             state[measure] = self.interface.get_measure(measure)
         loads = self.interface.get_measure("load")

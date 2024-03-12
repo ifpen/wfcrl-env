@@ -5,6 +5,8 @@ Adapted from openfast_toolbox example `Ex2_FFarmInputSetup.py`
 import glob
 import os
 import shutil
+import warnings
+from pathlib import Path
 
 import yaml
 from openfast_toolbox.fastfarm import fastFarmTurbSimExtent, writeFastFarm
@@ -21,9 +23,9 @@ def clean_folder(path):
             os.remove(subpath)
 
 
-def create_floris_case(xcoords, ycoords, direction=None, speed=None):
+def create_floris_case(xcoords, ycoords, direction=None, speed=None, output_dir=None):
     template_dir = TEMPLATE_DIR.format("floris")
-    output_dir = CASE_DIR.format("floris")
+    output_dir = CASE_DIR.format("floris") if output_dir is None else output_dir
     with open(f"{template_dir}case.yaml", "r") as fp:
         config = yaml.safe_load(fp)
     config["farm"]["layout_x"] = xcoords
@@ -37,26 +39,62 @@ def create_floris_case(xcoords, ycoords, direction=None, speed=None):
     return f"{output_dir}case.yaml"
 
 
-def read_simul_info(fstsf_file):
-    fstf = FASTInputFile(fstsf_file)
+def read_simul_info(fstf_file):
+    fstf = FASTInputFile(fstf_file)
     num_iter = fstf["TMax"] // fstf["DT_Low"]
     num_turbines = fstf["NumTurbines"]
     return num_turbines, num_iter
 
+def create_dll(fstf_file):
+    fstf = FASTInputFile(fstf_file)
+    base = Path(fstf_file).parent
+    path_to_sc_dll = (base / fstf["SC_FileName"].replace('"', "")).resolve()
 
-def create_ff_case(xcoords, ycoords, max_iter, dt):
+    # copy SC DLL only if it does not exist !
+    if path_to_sc_dll.exists():
+        warnings.warn(f"A supercontroler DLL already exists in {path_to_sc_dll}."
+                      "It will not be replaced.")
+    else:
+        path_to_sc_dll.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(f"{SERVO_DIR.format("fastfarm")}/SC_DLL.dll", path_to_sc_dll)
+
+    for ref_path in fstf["WindTurbines"][:, 3]:
+        fst = FASTInputFile(
+            (base / ref_path.replace('"', "")).resolve()
+        )
+        servo_file_name = fst["ServoFile"]
+        servo = FASTInputFile(
+            (base / servo_file_name.replace('"', "")).resolve()
+        )
+        servo_dll_filename = servo["DLL_FileName"]
+        path_to_servo_dll = (base / servo_dll_filename.replace('"', "")).resolve()
+        # copy SC DLL only if it does not exist !
+        if path_to_servo_dll.exists():
+            warnings.warn(f"A controler DLL already exists in {path_to_servo_dll}"
+                          "It will not be replaced.")
+        else:
+            shutil.copy(f"{SERVO_DIR.format("fastfarm")}/DISCON_WT1.dll", path_to_servo_dll)
+
+def create_ff_case(xcoords, ycoords, max_iter, dt, output_dir=None):
     template_dir = TEMPLATE_DIR.format("fastfarm")
-    output_dir = CASE_DIR.format("fastfarm")
     servoDir = SERVO_DIR.format("fastfarm")
+    templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
+    fstf = FASTInputFile(templateFSTF)
+    if output_dir is None:
+        output_dir = CASE_DIR.format("fastfarm")
+    else:
+        if output_dir[-1] != "/":
+            output_dir += "/"
+
+    # Create dirs
+    os.makedirs(f"{output_dir}servo_dll/", exist_ok=True)
     os.makedirs(f"{output_dir}FarmInputs/", exist_ok=True)
     os.makedirs(f"{output_dir}5MW_Baseline/ServoData/", exist_ok=True)
     os.makedirs(f"{output_dir}5MW_Baseline/Airfoils/", exist_ok=True)
     clean_folder(f"{output_dir}FarmInputs/*")
     clean_folder(f"{output_dir}5MW_Baseline/*")
-    templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
-    outputFSTF = os.path.join(f"{output_dir}FarmInputs/", "Case.fstf")
 
-    fstf = FASTInputFile(templateFSTF)
+    outputFSTF = os.path.join(f"{output_dir}FarmInputs/", "Case.fstf")
     ref_path = fstf["WindTurbines"][0, 3]
     max_time = max_iter * dt
 
@@ -126,6 +164,9 @@ def create_ff_case(xcoords, ycoords, max_iter, dt):
     )
     servo_dll_filename = servo["DLL_FileName"].split("/")[-1]
     servo_dll_file = os.path.join(servoDir, servo_dll_filename.replace('"', ""))
+
+    # Copy supercontroller dll
+    shutil.copy2(f"{servoDir}/SC_DLL.dll", f"{output_dir}servo_dll/SC_DLL.dll")
 
     # Copy all other files
     shutil.copytree(

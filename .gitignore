@@ -1,6 +1,7 @@
 simulators/fastfarm/bin/*
 simulators/fastfarm/inputs/5MW_Baseline/*
 simulators/fastfarm/inputs/FarmInputs/*
+simulators/fastfarm/inputs/servo_dll/*
 simulators/floris/inputs/case.yaml
 src/__pycache__/*
 src/cases/__pycache__/*
@@ -8,3 +9,4 @@ src/cases/__pycache__/*
 *.ech
 *.out
 *.pyc
+*ipynb_checkpoints

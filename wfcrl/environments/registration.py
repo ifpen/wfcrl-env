@@ -39,8 +39,8 @@ def get_case(name: str, simulator: str):
     simulator_index = registered_simulators.index(simulator)
     # Check for named case
     if name in named_cases_dictionary:
-        case_class = named_cases_dictionary[name][simulator_index]
-        return case_class()
+        case = named_cases_dictionary[name][simulator_index]
+        return case
     # Else Retrieve environment descriptor in env name
     match = re.match(layout_pattern, name)
     num_turbines = int(match.group(1))
@@ -53,9 +53,9 @@ def get_case(name: str, simulator: str):
     case.n_turbines = num_turbines
     case.xcoords = case.get_xcoords(num_turbines)
     case.ycoords = case.get_ycoords(num_turbines)
-    case.simul_kwargs["xcoords"] = case.xcoords
-    case.simul_kwargs["ycoords"] = case.ycoords
-    case.interface_kwargs["simul_kwargs"] = case.simul_kwargs
+    case.simul_params["xcoords"] = case.xcoords
+    case.simul_params["ycoords"] = case.ycoords
+    case.interface_kwargs["simul_params"] = case.simul_params
     return case
 
 
