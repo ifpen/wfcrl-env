@@ -419,7 +419,7 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
        ! Compute the generator torque, which depends on which region we are in:
 
-          IF ( (   GenSpeedF >= VS_RtGnSp ) .OR. (  PitCom(1) >= VS_Rgn3MP ) )  THEN ! We are in region 3 - power is constant
+          IF (   GenSpeedF >= VS_RtGnSp )  THEN ! We are in region 3 - power is constant ! .OR. (  PitCom(1) >= VS_Rgn3MP )
              GenTrq = VS_RtPwr/GenSpeedF
           ELSEIF ( GenSpeedF <= VS_CtInSp )  THEN                                    ! We are in region 1 - torque is zero
              GenTrq = 0.0
