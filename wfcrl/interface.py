@@ -132,7 +132,7 @@ class MPI_Interface(BaseInterface):
     def _validate_measure_map(self, measure_map):
         inv_measure_map = {}
         for name, indice in measure_map.items():
-            if type(indice) == int:
+            if isinstance(indice, int):
                 inv_measure_map[indice] = name
             elif isinstance(indice, Iterable):
                 for j, indice_i in enumerate(indice):
@@ -246,7 +246,7 @@ class MPI_Interface(BaseInterface):
             return None
         return self._current_torque_command.copy()[1:]
 
-    def avg_farm_power(self, window: int = 1):
+    def avg_farm_power(self, window: int = None):
         powers = self.avg_powers(window)
         return powers.sum()
 
@@ -260,10 +260,10 @@ class MPI_Interface(BaseInterface):
             window = self._measurement_window
         return self._wind_buffers.get_agg(window)
 
-    def last_powers(self, window: int = 1) -> np.ndarray:
+    def last_powers(self, window: int = 0) -> np.ndarray:
         return self._power_buffers.get_all(window)
 
-    def last_wind(self, window: int = 1) -> np.ndarray:
+    def last_wind(self, window: int = 0) -> np.ndarray:
         return self._wind_buffers.get_all(window)
 
     def get_measure(self, measure: str) -> np.ndarray:
