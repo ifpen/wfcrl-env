@@ -1,0 +1,2 @@
+# Overrides jupyter notebook in language stats count
+*.ipynb linguist-generated
