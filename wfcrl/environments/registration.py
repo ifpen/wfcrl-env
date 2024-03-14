@@ -3,7 +3,12 @@ import re
 from itertools import product
 from typing import Union
 
-from wfcrl.environments.data_cases import *
+from wfcrl.environments.data_cases import (
+    DefaultControl,
+    FarmRowFastfarm,
+    FarmRowFloris,
+    named_cases_dictionary,
+)
 from wfcrl.interface import FastFarmInterface, FlorisInterface
 from wfcrl.multiagent_env import MAWindFarmEnv
 from wfcrl.simple_env import WindFarmEnv
@@ -50,7 +55,7 @@ def get_case(name: str, simulator: str):
     assert num_rows == 1
     # Procedurally generate a single row wind farm
     case = FarmRowFastfarm() if simulator_index == 0 else FarmRowFloris()
-    case.n_turbines = num_turbines
+    case.num_turbines = num_turbines
     case.xcoords = case.get_xcoords(num_turbines)
     case.ycoords = case.get_ycoords(num_turbines)
     case.simul_params["xcoords"] = case.xcoords
@@ -86,9 +91,8 @@ def make(env_id: str, controls: Union[dict, list] = ["yaw"], log=True, **env_kwa
 
     env = env_class(
         interface=simulator_class,
-        num_turbines=case.n_turbines,
+        farm_case=case,
         controls=controls,
-        interface_kwargs=case.interface_kwargs,
         start_iter=math.ceil(case.t_init / case.dt),
         **env_kwargs,
     )

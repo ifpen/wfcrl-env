@@ -1,11 +1,11 @@
 import functools
-from typing import Dict
 
 import numpy as np
 from gymnasium import spaces
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector
 
+from wfcrl.environments import FarmCase
 from wfcrl.interface import BaseInterface
 from wfcrl.mdp import WindFarmMDP
 from wfcrl.rewards import DoNothingReward, RewardShaper
@@ -17,20 +17,18 @@ class MAWindFarmEnv(AECEnv):
     def __init__(
         self,
         interface: BaseInterface,
-        num_turbines: int,
+        farm_case: FarmCase,
         controls: dict,
         continuous_control: bool = True,
-        interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
-            num_turbines=num_turbines,
+            farm_case=farm_case,
             controls=controls,
             continuous_control=continuous_control,
-            interface_kwargs=interface_kwargs,
             start_iter=start_iter,
             horizon=start_iter + max_num_steps,
         )

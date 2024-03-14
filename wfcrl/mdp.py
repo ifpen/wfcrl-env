@@ -5,6 +5,7 @@ from typing import Dict, Iterable
 import numpy as np
 from gymnasium import spaces
 
+from wfcrl.environments import FarmCase
 from wfcrl.interface import BaseInterface, MPI_Interface
 
 
@@ -44,23 +45,24 @@ class WindFarmMDP:
     def __init__(
         self,
         interface: BaseInterface,
-        num_turbines: int,
+        farm_case: FarmCase,
         controls: dict,
         continuous_control: bool = True,
-        interface_kwargs: dict = {},
         start_iter: int = 0,
         horizon: int = int(1e6),
     ):
-        interface_kwargs["num_turbines"] = num_turbines
-        interface_kwargs["max_iter"] = horizon
+        farm_case.max_iter = horizon
         if interface == MPI_Interface:
             # MPI_Interface connects to an already running
             # process so it does not accept
             # simulation configuration
             # Log warning here ?
+            interface_kwargs = farm_case.interface_kwargs
             del interface_kwargs["simul_params"]
-        self.interface = interface.from_case(**interface_kwargs)
-        self.num_turbines = num_turbines
+            self.interface = interface(**interface_kwargs)
+        else:
+            self.interface = interface.from_case(farm_case)
+        self.num_turbines = farm_case.num_turbines
         self.continuous_control = continuous_control
         self.horizon = horizon
         self.start_iter = start_iter
@@ -104,7 +106,7 @@ class WindFarmMDP:
 
         # Setup state space
         state_space_dict = {}
-        bound_array = np.ones(num_turbines, dtype=np.float32)
+        bound_array = np.ones(self.num_turbines, dtype=np.float32)
         for attr in self.state_attributes:
             if attr == "wind_measurements":
                 low_ws, high_ws = self.DEFAULT_BOUNDS["wind_speed"]

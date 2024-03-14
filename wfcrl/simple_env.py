@@ -4,6 +4,7 @@ from typing import Dict
 import gymnasium as gym
 import numpy as np
 
+from wfcrl.environments import FarmCase
 from wfcrl.interface import BaseInterface
 from wfcrl.mdp import WindFarmMDP
 from wfcrl.rewards import DoNothingReward, RewardShaper
@@ -13,20 +14,18 @@ class WindFarmEnv(gym.Env):
     def __init__(
         self,
         interface: BaseInterface,
-        num_turbines: int,
+        farm_case: FarmCase,
         controls: dict,
         continuous_control: bool = True,
-        interface_kwargs: Dict = None,
         reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
-            num_turbines=num_turbines,
+            farm_case=farm_case,
             controls=controls,
             continuous_control=continuous_control,
-            interface_kwargs=interface_kwargs,
             start_iter=start_iter,
             horizon=start_iter + max_num_steps,
         )
@@ -48,7 +47,7 @@ class WindFarmEnv(gym.Env):
 
     def step(self, actions: Dict):
         """
-        action: dictionary of np.array of shape (n_turbines,)
+        action: dictionary of np.array of shape (num_turbines,)
         """
         assert self._state is not None, "Call reset before `step`"
 

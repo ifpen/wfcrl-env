@@ -34,11 +34,9 @@ A simple tutorial to start a simulation with the FastFarm interface is available
 from wfcrl.environments import data_cases as cases
 from wfcrl.interface import FastFarmInterface
 
-config = cases.Farm6Fastfarm()
+config = cases.fastfarm_6t
 interface = FastFarmInterface(
-    num_turbines=config.n_turbines,
-    max_iter=10,
-    **config.interface_kwargs
+    config,
 )
 ```
 
@@ -46,10 +44,8 @@ By default, your FAST.Farm executable is assumed to be located in `simulators/fa
 
 ```
 interface = FastFarmInterface(
-    num_turbines=config.n_turbines,
-    max_iter=10,
+    config,
     fast_farm_executable=path_to_exe,
-    **config.interface_kwargs
 )
 ```
 

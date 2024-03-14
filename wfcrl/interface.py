@@ -6,6 +6,7 @@ import pandas as pd
 from floris import tools
 from mpi4py import MPI
 
+from wfcrl.environments import FarmCase
 from wfcrl.simul_utils import (
     create_dll,
     create_ff_case,
@@ -368,27 +369,24 @@ class FastFarmInterface(MPI_Interface):
     @classmethod
     def from_case(
         cls,
-        num_turbines: int,
-        simul_params: dict,
-        max_iter: int,
+        case: FarmCase,
         fast_farm_executable: str = default_exe_path,
-        measurement_window: int = 30,
         buffer_size: int = 50_000,
         log_file: str = None,
         output_dir: str = None,
     ):
-        assert num_turbines == len(simul_params["xcoords"])
         fstf_file = create_ff_case(
-            max_iter=max_iter, output_dir=output_dir, **simul_params
+            case.dict(),
+            output_dir=output_dir,
         )
 
         return cls(
-            num_turbines=num_turbines,
+            num_turbines=case.num_turbines,
             fstf_file=fstf_file,
-            measurement_window=measurement_window,
+            measurement_window=case.measurement_window,
             buffer_size=buffer_size,
             log_file=log_file,
-            max_iter=max_iter,
+            max_iter=case.max_iter,
             fast_farm_executable=fast_farm_executable,
         )
 
@@ -414,14 +412,12 @@ class FlorisInterface(BaseInterface):
     def __init__(
         self,
         num_turbines: int,
-        simul_params: dict,
+        simul_file: str,
         max_iter: int = int(1e4),
         log_file: str = None,
-        output_dir: str = None,
     ):
         super().__init__()
 
-        simul_file = create_floris_case(output_dir=output_dir, **simul_params)
         self.num_turbines = num_turbines
         self.fi = tools.FlorisInterface(simul_file)
         self.fi.reinitialize()
@@ -440,18 +436,16 @@ class FlorisInterface(BaseInterface):
     @classmethod
     def from_case(
         cls,
-        num_turbines: int,
-        simul_params: dict,
-        max_iter: int = int(1e4),
+        case: FarmCase,
         log_file: str = None,
         output_dir: str = None,
     ):
+        simul_file = create_floris_case(case.dict(), output_dir=output_dir)
         return cls(
-            num_turbines=num_turbines,
-            simul_params=simul_params,
-            max_iter=max_iter,
+            num_turbines=case.num_turbines,
+            simul_file=simul_file,
+            max_iter=case.max_iter,
             log_file=log_file,
-            output_dir=output_dir,
         )
 
     @property

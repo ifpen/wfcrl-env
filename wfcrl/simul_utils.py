@@ -7,6 +7,7 @@ import os
 import shutil
 import warnings
 from pathlib import Path
+from typing import Dict
 
 import yaml
 from openfast_toolbox.fastfarm import fastFarmTurbSimExtent, writeFastFarm
@@ -23,20 +24,21 @@ def clean_folder(path):
             os.remove(subpath)
 
 
-def create_floris_case(xcoords, ycoords, direction=None, speed=None, output_dir=None):
+def create_floris_case(case: Dict, output_dir=None):
     template_dir = TEMPLATE_DIR.format("floris")
-    output_dir = CASE_DIR.format("floris") if output_dir is None else output_dir
+    output_dir = Path(CASE_DIR.format("floris") if output_dir is None else output_dir)
+    params = case["simul_params"]
     with open(f"{template_dir}case.yaml", "r") as fp:
         config = yaml.safe_load(fp)
-    config["farm"]["layout_x"] = xcoords
-    config["farm"]["layout_y"] = ycoords
-    if direction is not None:
-        config["flow_field"]["wind_directions"] = [direction]
-    if speed is not None:
-        config["flow_field"]["layout_y"] = [speed]
-    with open(f"{output_dir}case.yaml", "w") as fp:
+    config["farm"]["layout_x"] = params["xcoords"]
+    config["farm"]["layout_y"] = params["ycoords"]
+    if params["direction"] is not None:
+        config["flow_field"]["wind_directions"] = [params["direction"]]
+    if params["speed"] is not None:
+        config["flow_field"]["wind_speeds"] = [params["speed"]]
+    with open(output_dir / "case.yaml", "w") as fp:
         yaml.safe_dump(config, fp)
-    return f"{output_dir}case.yaml"
+    return str(output_dir / "case.yaml")
 
 
 def read_simul_info(fstf_file):
@@ -45,6 +47,7 @@ def read_simul_info(fstf_file):
     num_turbines = fstf["NumTurbines"]
     return num_turbines, num_iter
 
+
 def create_dll(fstf_file):
     fstf = FASTInputFile(fstf_file)
     base = Path(fstf_file).parent
@@ -52,30 +55,38 @@ def create_dll(fstf_file):
 
     # copy SC DLL only if it does not exist !
     if path_to_sc_dll.exists():
-        warnings.warn(f"A supercontroler DLL already exists in {path_to_sc_dll}."
-                      "It will not be replaced.")
+        warnings.warn(
+            f"A supercontroler DLL already exists in {path_to_sc_dll}."
+            "It will not be replaced."
+        )
     else:
         path_to_sc_dll.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(f"{SERVO_DIR.format("fastfarm")}/SC_DLL.dll", path_to_sc_dll)
+        shutil.copy(f"{SERVO_DIR.format('fastfarm')}/SC_DLL.dll", path_to_sc_dll)
 
     for ref_path in fstf["WindTurbines"][:, 3]:
-        fst = FASTInputFile(
-            (base / ref_path.replace('"', "")).resolve()
-        )
+        fst = FASTInputFile((base / ref_path.replace('"', "")).resolve())
         servo_file_name = fst["ServoFile"]
-        servo = FASTInputFile(
-            (base / servo_file_name.replace('"', "")).resolve()
-        )
+        servo = FASTInputFile((base / servo_file_name.replace('"', "")).resolve())
         servo_dll_filename = servo["DLL_FileName"]
         path_to_servo_dll = (base / servo_dll_filename.replace('"', "")).resolve()
         # copy SC DLL only if it does not exist !
         if path_to_servo_dll.exists():
-            warnings.warn(f"A controler DLL already exists in {path_to_servo_dll}"
-                          "It will not be replaced.")
+            warnings.warn(
+                f"A controler DLL already exists in {path_to_servo_dll}"
+                "It will not be replaced."
+            )
         else:
-            shutil.copy(f"{SERVO_DIR.format("fastfarm")}/DISCON_WT1.dll", path_to_servo_dll)
+            shutil.copy(
+                f'{SERVO_DIR.format("fastfarm")}/DISCON_WT1.dll', path_to_servo_dll
+            )
 
-def create_ff_case(xcoords, ycoords, max_iter, dt, output_dir=None):
+
+def create_ff_case(case: Dict, output_dir=None):
+    assert case["num_turbines"] == len(case["simul_params"]["xcoords"])
+    xcoords = case["simul_params"]["xcoords"]
+    ycoords = case["simul_params"]["ycoords"]
+    max_iter, dt = case["max_iter"], case["simul_params"]["dt"]
+
     template_dir = TEMPLATE_DIR.format("fastfarm")
     servoDir = SERVO_DIR.format("fastfarm")
     templateFSTF = os.path.join(f"{template_dir}FarmInputs/", "Case.fstf")
