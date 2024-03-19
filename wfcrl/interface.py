@@ -86,12 +86,12 @@ class MPI_Interface(BaseInterface):
         self,
         measure_map: dict,
         num_turbines: int,
-        measurement_window: int = 30,
         buffer_size: int = 50_000,
         log_file: str = None,
         comm: MPI.Comm = MPI.COMM_WORLD,
         target_process_rank: int = None,
         max_iter: int = 500,
+        default_avg_window: int = 1,
     ):
         super().__init__()
 
@@ -102,7 +102,7 @@ class MPI_Interface(BaseInterface):
             target_process_rank = 1 - rank
         self._target_process_rank = target_process_rank
         self._buffer_size = buffer_size
-        self._measurement_window = measurement_window
+        self._default_avg_window = default_avg_window
         self._num_measures = None
         self.current_measures = None
         self.max_iter = max_iter
@@ -192,7 +192,7 @@ class MPI_Interface(BaseInterface):
                     f" PITCH {self.get_pitch_command()}"
                     f" TORQUE {self.get_torque_command()}\n"
                     f"***********Received Power: {power} - "
-                    f"Filtered Power: (window {self._measurement_window}):"
+                    f"Filtered Power: (window {self._default_avg_window}):"
                     f"{self.avg_powers()} - "
                     f" Wind : {self.avg_wind()}\n"
                 )
@@ -253,12 +253,12 @@ class MPI_Interface(BaseInterface):
 
     def avg_powers(self, window: int = None) -> List:
         if window is None:
-            window = self._measurement_window
+            window = self._default_avg_window
         return self._power_buffers.get_agg(window)
 
     def avg_wind(self, window: int = None) -> List:
         if window is None:
-            window = self._measurement_window
+            window = self._default_avg_window
         return self._wind_buffers.get_agg(window)
 
     def last_powers(self, window: int = 0) -> np.ndarray:
@@ -322,17 +322,17 @@ class FastFarmInterface(MPI_Interface):
         self,
         num_turbines: int,
         fstf_file: bool,
-        measurement_window: int = 30,
         buffer_size: int = 50_000,
         log_file: str = None,
         max_iter: int = int(1e4),
         fast_farm_executable: str = default_exe_path,
+        default_avg_window: int = 1,
     ):
         self._path_to_fastfarm_exe = fast_farm_executable
         self._simul_file = fstf_file
 
         super().__init__(
-            measurement_window=measurement_window,
+            default_avg_window=default_avg_window,
             buffer_size=buffer_size,
             num_turbines=num_turbines,
             log_file=log_file,
@@ -347,9 +347,9 @@ class FastFarmInterface(MPI_Interface):
         cls,
         fstf_file,
         fast_farm_executable: str = default_exe_path,
-        measurement_window: int = 30,
         buffer_size: int = 50_000,
         log_file: str = None,
+        default_avg_window: int = 1,
     ):
         print(f"Simulation will be started from fstf file {fstf_file}")
         num_turbines, max_iter = read_simul_info(fstf_file)
@@ -359,7 +359,7 @@ class FastFarmInterface(MPI_Interface):
         return cls(
             num_turbines=num_turbines,
             fstf_file=fstf_file,
-            measurement_window=measurement_window,
+            default_avg_window=default_avg_window,
             buffer_size=buffer_size,
             log_file=log_file,
             max_iter=max_iter,
@@ -383,7 +383,7 @@ class FastFarmInterface(MPI_Interface):
         return cls(
             num_turbines=case.num_turbines,
             fstf_file=fstf_file,
-            measurement_window=case.measurement_window,
+            default_avg_window=case.avg_window,
             buffer_size=buffer_size,
             log_file=log_file,
             max_iter=case.max_iter,

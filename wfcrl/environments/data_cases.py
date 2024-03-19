@@ -51,16 +51,16 @@ class FastFarmCase(FarmCase):
 
     @property
     def interface_kwargs(self):
-        return {
-            "measurement_window": int(self.buffer_window / self.dt),
-            "simul_params": self.simul_params,
+        params = {
             "max_iter": self.max_iter,
             "num_turbines": self.num_turbines,
         }
+        params.update(self.simul_params)
+        return params
 
     @property
-    def measurement_window(self):
-        return self.interface_kwargs["measurement_window"]
+    def avg_window(self):
+        return int(self.buffer_window / self.dt)
 
     @property
     def simul_params(self):
@@ -72,7 +72,7 @@ class FlorisCase(FarmCase):
 
     @property
     def interface_kwargs(self):
-        return {"simul_params": self.simul_params}
+        return self.simul_params
 
     @property
     def simul_params(self):

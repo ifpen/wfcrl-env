@@ -58,9 +58,6 @@ def get_case(name: str, simulator: str):
     case.num_turbines = num_turbines
     case.xcoords = case.get_xcoords(num_turbines)
     case.ycoords = case.get_ycoords(num_turbines)
-    case.simul_params["xcoords"] = case.xcoords
-    case.simul_params["ycoords"] = case.ycoords
-    case.interface_kwargs["simul_params"] = case.simul_params
     return case
 
 

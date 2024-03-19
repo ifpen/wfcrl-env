@@ -58,7 +58,8 @@ class WindFarmMDP:
             # simulation configuration
             # Log warning here ?
             interface_kwargs = farm_case.interface_kwargs
-            del interface_kwargs["simul_params"]
+            for key in farm_case.simul_params:
+                del interface_kwargs[key]
             self.interface = interface(**interface_kwargs)
         else:
             self.interface = interface.from_case(farm_case)

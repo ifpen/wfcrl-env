@@ -27,15 +27,14 @@ def clean_folder(path):
 def create_floris_case(case: Dict, output_dir=None):
     template_dir = TEMPLATE_DIR.format("floris")
     output_dir = Path(CASE_DIR.format("floris") if output_dir is None else output_dir)
-    params = case["simul_params"]
     with open(f"{template_dir}case.yaml", "r") as fp:
         config = yaml.safe_load(fp)
-    config["farm"]["layout_x"] = params["xcoords"]
-    config["farm"]["layout_y"] = params["ycoords"]
-    if params["direction"] is not None:
-        config["flow_field"]["wind_directions"] = [params["direction"]]
-    if params["speed"] is not None:
-        config["flow_field"]["wind_speeds"] = [params["speed"]]
+    config["farm"]["layout_x"] = case["xcoords"]
+    config["farm"]["layout_y"] = case["ycoords"]
+    if case["direction"] is not None:
+        config["flow_field"]["wind_directions"] = [case["direction"]]
+    if case["speed"] is not None:
+        config["flow_field"]["wind_speeds"] = [case["speed"]]
     with open(output_dir / "case.yaml", "w") as fp:
         yaml.safe_dump(config, fp)
     return str(output_dir / "case.yaml")
@@ -82,10 +81,10 @@ def create_dll(fstf_file):
 
 
 def create_ff_case(case: Dict, output_dir=None):
-    assert case["num_turbines"] == len(case["simul_params"]["xcoords"])
-    xcoords = case["simul_params"]["xcoords"]
-    ycoords = case["simul_params"]["ycoords"]
-    max_iter, dt = case["max_iter"], case["simul_params"]["dt"]
+    assert case["num_turbines"] == len(case["xcoords"])
+    xcoords = case["xcoords"]
+    ycoords = case["ycoords"]
+    max_iter, dt = case["max_iter"], case["dt"]
 
     template_dir = TEMPLATE_DIR.format("fastfarm")
     servoDir = SERVO_DIR.format("fastfarm")
