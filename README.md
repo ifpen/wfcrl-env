@@ -35,18 +35,13 @@ from wfcrl.environments import data_cases as cases
 from wfcrl.interface import FastFarmInterface
 
 config = cases.fastfarm_6t
-interface = FastFarmInterface(
-    config,
-)
+interface = FastFarmInterface(config)
 ```
 
 By default, your FAST.Farm executable is assumed to be located in `simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe`. If not, you can also pass it to the interface:
 
 ```
-interface = FastFarmInterface(
-    config,
-    fast_farm_executable=path_to_exe,
-)
+interface = FastFarmInterface(config, fast_farm_executable=path_to_exe)
 ```
 
 
@@ -76,22 +71,9 @@ A more detailed introduction is available in the `demo.ipynb` notebook. To prope
 
 ## Running Examples Notebook
 
-To run the `interface.ipynb` and `demo.ipynb` examples, you will need to launch the notebooks with `MPI`:
-
-Run the following command to find the root folder of your kernel specifications.
-```
-jupyter kernelspec list
-```
-
-Open the `kernel.json` file, and in `argv`, add at the beginning of the list, add the following arguments `"mpiexec", "-n", "1",`. Your complete argument list should look like this:
+To run the `interface.ipynb` and `demo.ipynb` examples, you will first need to install the WFCRL kernel:
 
 ```
-"argv": [
-  "mpiexec", "-n", "1",
-  path_to_python.exe,
-  "-m",
-  "ipykernel_launcher",
-  "-f",
-  "{connection_file}"
- ],
-``
+from wfcrl import jupyter_utils
+jupyter_utils.create_ipykernel()
+```
