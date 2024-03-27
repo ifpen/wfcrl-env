@@ -86,7 +86,7 @@ class FlorisCase(FarmCase):
 
 # 3 turbines row layouts
 fastfarm_3t = FastFarmCase(
-    num_turbines=6,
+    num_turbines=3,
     xcoords=[0.0, 504.0, 1008.0],
     ycoords=[0.0, 0.0, 0.0],
     dt=3,
@@ -169,7 +169,7 @@ ycoords = [
 ]
 # fmt: on
 fastfarm_32t = FastFarmCase(
-    num_turbines=16,
+    num_turbines=32,
     xcoords=xcoords,
     ycoords=ycoords,
     dt=3,
@@ -177,7 +177,7 @@ fastfarm_32t = FastFarmCase(
     t_init=9,
 )
 floris_32t = FlorisCase(
-    num_turbines=16,
+    num_turbines=32,
     xcoords=xcoords,
     ycoords=ycoords,
     dt=1,
