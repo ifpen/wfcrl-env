@@ -9,8 +9,13 @@ import warnings
 from pathlib import Path
 from typing import Dict
 
+import numpy as np
 import yaml
-from openfast_toolbox.fastfarm import fastFarmTurbSimExtent, writeFastFarm
+from openfast_toolbox.fastfarm import (
+    fastFarmBoxExtent,
+    fastFarmTurbSimExtent,
+    writeFastFarm,
+)
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 
 TEMPLATE_DIR = "simulators/{}/inputs/template/"
@@ -118,10 +123,9 @@ def create_ff_case(case: Dict, output_dir=None):
         os.path.join(f"{template_dir}FarmInputs/", fstf["InflowFile"].replace('"', ""))
     )
 
-    # --- Parameters for TurbSim Extent
+    FFTS = None
     # Turbine diameter (m)
-    R = ed["TipRad"]
-    D = R * 2
+    D = ed["TipRad"] * 2
     # Hub Height (m)
     hubHeight = ed["TowerHt"]
     # x-extent of high res box in diamter around turbine location
@@ -130,31 +134,51 @@ def create_ff_case(case: Dict, output_dir=None):
     extent_YZ_high = 1.2  # np.round((fstf['NY_High'] * dYZ_High)/D,2)
     # maximum blade chord (m). Turbine specific.
     chord_max = 5
-    # Meandering constant (-)
-    Cmeander = 1.9
     # All turbine have same z coordinates
     zcoords = [0.0 for _ in xcoords]
-
-    # TurbSim Box to be used in FAST.Farm simulation, need to exist.
-    BTS_filename = os.path.join(
-        f"{template_dir}FarmInputs/", inflow["FileName_BTS"].replace('"', "")
-    )
-
-    out_list_sel = None
-
-    # --- Get box extents
-    FFTS = fastFarmTurbSimExtent(
-        BTS_filename,
-        hubHeight,
-        D,
-        xcoords,
-        ycoords,
-        Cmeander=Cmeander,
-        chord_max=chord_max,
-        extent_X=extent_X_high,
-        extent_YZ=extent_YZ_high,
-        meanUAtHubHeight=True,
-    )
+    # Meandering constant (-)
+    Cmeander = 1.9
+    # # If TurbSim is used, retrieve wind info from `.bts` file
+    if inflow["WindType"] == 3:
+        # TurbSim .bts file to be used in FAST.Farm simulation, needs to exist.
+        BTS_filename = os.path.join(
+            f"{template_dir}FarmInputs/", inflow["FileName_BTS"].replace('"', "")
+        )
+        # --- Get box extents
+        FFTS = fastFarmTurbSimExtent(
+            BTS_filename,
+            hubHeight,
+            D,
+            xcoords,
+            ycoords,
+            Cmeander=Cmeander,
+            chord_max=chord_max,
+            extent_X=extent_X_high,
+            extent_YZ=extent_YZ_high,
+            meanUAtHubHeight=True,
+        )
+    else:
+        mean_wind = inflow["HWindSpeed"]
+        ny, nz = fstf["NY_Low"] - 1, fstf["NZ_Low"] - 1
+        width, height = fstf["dY_Low"] * ny, fstf["dZ_Low"] * nz
+        time = 200
+        y = np.linspace(-width / 2, width / 2, ny)
+        z = np.linspace(0, height, nz)
+        t = np.arange(0, time, fstf["DT_High"] / 10)
+        FFTS = fastFarmBoxExtent(
+            y,
+            z,
+            t,
+            mean_wind,
+            hubHeight,
+            D,
+            xcoords,
+            ycoords,
+            Cmeander=Cmeander,
+            chord_max=chord_max,
+            extent_X=extent_X_high,
+            extent_YZ=extent_YZ_high,
+        )
 
     # --- Write Fast Farm file with layout and Low and High res extent
     writeFastFarm(
@@ -164,7 +188,6 @@ def create_ff_case(case: Dict, output_dir=None):
         ycoords,
         zcoords,
         FFTS=FFTS,
-        OutListT1=out_list_sel,
     )
     print("Created FAST.Farm input file:", outputFSTF)
 
