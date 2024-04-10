@@ -18,9 +18,11 @@ from openfast_toolbox.fastfarm import (
 )
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 
-TEMPLATE_DIR = "simulators/{}/inputs/template/"
-CASE_DIR = "simulators/{}/inputs/"
-SERVO_DIR = "simulators/{}/servo_dll/"
+LOCAL_DIR = Path(__file__).resolve().parent
+
+TEMPLATE_DIR = str(LOCAL_DIR / "simulators/{}/inputs/template/") + "/"
+CASE_DIR = str(LOCAL_DIR / "simulators/{}/inputs/") + "/"
+SERVO_DIR = str(LOCAL_DIR / "simulators/{}/servo_dll/") + "/"
 
 
 def clean_folder(path):

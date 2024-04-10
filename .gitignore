@@ -1,8 +1,8 @@
 simulators/fastfarm/bin/*
-simulators/fastfarm/inputs/5MW_Baseline/*
-simulators/fastfarm/inputs/FarmInputs/*
-simulators/fastfarm/inputs/servo_dll/*
-simulators/floris/inputs/case.yaml
+wfcrl/simulators/fastfarm/inputs/5MW_Baseline/*
+wfcrl/simulators/fastfarm/inputs/FarmInputs/*
+wfcrl/simulators/fastfarm/inputs/servo_dll/*
+wfcrl/simulators/floris/inputs/case.yaml
 src/__pycache__/*
 src/cases/__pycache__/*
 *.sum
@@ -10,3 +10,5 @@ src/cases/__pycache__/*
 *.out
 *.pyc
 *ipynb_checkpoints
+build/*
+WFCRL.egg-info/*
