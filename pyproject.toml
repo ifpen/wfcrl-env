@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ['wfcrl*']
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[project]
+name = "WFCRL"
+version = "0.0.1"
+authors = [
+  { name="Inria - IFP Energies Nouvelles", email="claire.bizon-monroc@inria.fr" },
+]
+dynamic = ["dependencies"]
+description = "Interfacing and benchmark Reinforcement Learning tools for Wind Farm Control"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Windows",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+]
+
+[project.urls]
+Issues = "https://github.com/cibeah/WFCRL/issues"

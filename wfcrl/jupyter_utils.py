@@ -23,6 +23,6 @@ kernel_json_params["argv"][3] = sys.executable
 
 def create_ipykernel():
     os.makedirs("wfcrl-kernel", exist_ok=True)
-    with open("wfcrl-kernel/kernel.json", "w") as fp:
+    with open("kernel-wfcrl/kernel.json", "w") as fp:
         json.dump(kernel_json_params, fp)
-    subprocess.run(("jupyter kernelspec install --user wfcrl-kernel").split(" "))
+    subprocess.run(("jupyter kernelspec install --user kernel-wfcrl").split(" "))
