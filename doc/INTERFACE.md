@@ -1,4 +1,4 @@
-# WFCRL: Interfacing and Benchmark Reinforcement Learning for Wind Farm Control
+# Farm2Python: Interfacing Tool for Wind Farm Control
 
 ## Using the FastFarm interface
 
@@ -60,58 +60,16 @@ At every iteration, the FAST.Farm interace retrieves 12 measures per turbine:
 - The torque of the turbine
 - 6 measures of blade loads
 
-A detailed example can be found in the `interface.ipynb` notebook. To run this notebook, follow the instructions under *Running Example Notebooks*.
-
-
-# Using the Reinforcement Learning environments
-
-## Farm environments
-
-List all environments:
-
-```
-from wfcrl import environments as envs
-envs.list_envs()
-```
-
-|  Root Name |  Description |
-|---|---|
-|  Ablaincourt |  Inspired by layout of the Ablaincourt farm in France, (Duc et al, 2019) |
-|  Turb16_TCRWP |  Layout of the [Total Control Reference Wind Power Plant](https://farmconners.readthedocs.io/en/latest/provided_data_sets.html) (TC RWP) (the first 16 turbines) |
-| Turb3_Row1  |  Custom case - Single row of 3 turbines |
-| Turb6_Row2   |  Custom case - 2 rows of 6 turbine |
-| Turb16_Row5   | Layout of the first 16 turbines in the the CL-Windcon project [as implemented in WFSim](https://github.com/TUDelft-DataDrivenControl/WFSim/blob/master/layoutDefinitions/layoutSet_clwindcon_80turb.m)|
-| Turb32_Row5   | Layout of the first 32 turbines in the the CL-Windcon project [as implemented in WFSim](https://github.com/TUDelft-DataDrivenControl/WFSim/blob/master/layoutDefinitions/layoutSet_clwindcon_80turb.m)  |
-| TurbX_Row1 for X in [1, 12] | Procedurally generated single row layout with X turbines  |
-
-All wind farms environments are implemented with both the `Gymnasium` and `PettingZoo` API, and can be run on both the `Floris` and the `FastFarm` wind farm simulators.
-
-
-The root name of the environment is associated with a prefix and a suffix:
-- A `Dec_` prefix is added before environment names to indicate an Agent Environment Cycle implementation supported by `PettingZoo`.
-- A `Floris` or `Fastfarm` suffix is added after the name of the environment to indicate the name of the background simulator.
-
-## Example
-
-Creating a wind farm environment of the TC RWP layout with the Floris background on Gymnasium:
-
-```
-from wfcrl import environments as envs
-env = envs.make("Ablaincourt_Floris")
-```
-
-To use the Fastfarm background, make sure to have installed the Fastfarm and MPI dependencies as indicated in *Using the FastFarm interface*.
-
-An example of a test case using the PettingZoo environment in FastFarm with a simple step policy is given in `example.py`. It can be launched with
+### Using the RL environments
+An example of a test case using the multi-agent environment with a simple step policy is given in `example.py`. It can be launched with
 
 ```
 mpiexec -n 1 python example.py
 ```
 
-More detailed examples can be found in the `demo.ipynb` notebook. See below under *Running Example Notebooks*.
+A more detailed introduction is available in the `demo.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
 
-
-# Running Example Notebooks
+## Running Examples Notebook
 
 To run the `interface.ipynb` and `demo.ipynb` examples, you will first need to install the WFCRL kernel:
 

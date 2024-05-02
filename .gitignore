@@ -12,3 +12,4 @@ src/cases/__pycache__/*
 *ipynb_checkpoints
 build/*
 WFCRL.egg-info/*
+kernel-wfcrl/*

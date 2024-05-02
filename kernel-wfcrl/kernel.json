@@ -1,1 +1,0 @@
-{"argv": ["mpiexec", "-n", "1", "C:\\Users\\bizonmoc\\Anaconda3\\envs\\wfcrl\\python.exe", "-m", "ipykernel_launcher", "-f", "{connection_file}"], "display_name": "WFCRL Interface", "language": "python", "metadata": {"debugger": true}}
