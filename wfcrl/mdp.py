@@ -33,7 +33,14 @@ class WindFarmMDP:
     """
 
     CONTROL_SET = ["yaw", "pitch", "torque"]
-    POSSIBLE_STATE_ATTRIBUTES = ["wind_measurements", "yaw", "pitch", "torque"]
+    POSSIBLE_STATE_ATTRIBUTES = [
+        "freewind_measurements",
+        "wind_speed",
+        "wind_direction",
+        "yaw",
+        "pitch",
+        "torque",
+    ]
     DEFAULT_BOUNDS = {
         "wind_speed": [3, 28],
         "wind_direction": [0, 360],
@@ -41,6 +48,7 @@ class WindFarmMDP:
         "pitch": [0, 360],
         "torque": [-1e5, 1e5],
     }
+    ACTUATORS_RATE = {"yaw": 0.3, "pitch": 8}
 
     def __init__(
         self,
@@ -67,6 +75,7 @@ class WindFarmMDP:
         self.continuous_control = continuous_control
         self.horizon = horizon
         self.start_iter = start_iter
+        self.farm_case = farm_case
 
         # Check validity of controls
         self._check_controls(controls)
@@ -108,13 +117,13 @@ class WindFarmMDP:
         # Setup state space
         state_space_dict = {}
         bound_array = np.ones(self.num_turbines, dtype=np.float32)
+        low_ws, high_ws = self.DEFAULT_BOUNDS["wind_speed"]
+        (
+            low_wd,
+            high_wd,
+        ) = self.DEFAULT_BOUNDS["wind_direction"]
         for attr in self.state_attributes:
-            if attr == "wind_measurements":
-                low_ws, high_ws = self.DEFAULT_BOUNDS["wind_speed"]
-                (
-                    low_wd,
-                    high_wd,
-                ) = self.DEFAULT_BOUNDS["wind_direction"]
+            if attr == "freewind_measurements":
                 low = np.array([low_ws, low_wd], dtype=np.float32)
                 high = np.array([high_ws, high_wd], dtype=np.float32)
             elif attr in controls:
@@ -131,6 +140,12 @@ class WindFarmMDP:
         self.state_space = spaces.Dict(state_space_dict)
         self.start_state = None
 
+        # Set up constraints on actuation dict
+        self._actuation_accumulator = {
+            control: np.zeros(self.num_turbines, dtype=np.float32)
+            for control in controls
+        }
+
         # Take first steps in the interface until start_iter
         # for t in range(start_iter + 1):
         #     self.interface.update_command()
@@ -146,6 +161,9 @@ class WindFarmMDP:
 
     def get_state_powers(self):
         return self.interface.avg_powers()
+
+    def get_accumulated_actions(self, agent=None):
+        return self._actuation_accumulator.copy()
 
     def _cast_dict_array(self, state):
         state_cast = {}
@@ -204,7 +222,7 @@ class WindFarmMDP:
                     f"State attribute {attr} must be a numpy array."
                     f"Received {type(value)}"
                 )
-            if attr != "wind_measurements" and not (
+            if attr != "freewind_measurements" and not (
                 value.shape == (self.num_turbines,)
             ):
                 raise TypeError(
@@ -212,14 +230,18 @@ class WindFarmMDP:
                     f"but received {value.shape}. NUM_TURBINES = {self.num_turbines})"
                 )
 
-    def reset(self):
-        self.interface.init()
+    def reset(self, wind_speed: float = None, wind_direction: float = None):
+        self.interface.init(wind_speed, wind_direction)
         for _ in range(self.start_iter + 1):
             self.interface.update_command()
         start_state = OrderedDict(
             {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
         )
         self.start_state = clip_to_dict_space(start_state, self.state_space)
+        self._actuation_accumulator = {
+            control: np.zeros(self.num_turbines, dtype=np.float32)
+            for control in self.controls
+        }
         return self.start_state
 
     def step_interface(self, state: Dict):
@@ -228,12 +250,14 @@ class WindFarmMDP:
             step_dict[control] = state[control]
         done = self.interface.update_command(**step_dict)
         powers = self.get_state_powers()
+        # normalize by initial freestream wind
+        powers /= self.start_state["freewind_measurements"][0] ** 3
         for measure in self.measures:
             state[measure] = self.interface.get_measure(measure)
         loads = self.interface.get_measure("load")
         if loads is not None:
-            loads /= 1e6
-        return state, powers / 1e6, loads, done
+            loads /= 1e7
+        return state, powers / 1e3, loads, done
 
     def take_action(self, state: Dict, joint_action: Dict):
         next_state = self.get_controlled_state_transition(state, joint_action)
@@ -262,4 +286,7 @@ class WindFarmMDP:
                 self.state_space[control].low,
                 self.state_space[control].high,
             )
+            # track actuators trajectory for penalization purpose
+            if control in self._actuation_accumulator:
+                self._actuation_accumulator[control] += np.abs(command_joint_action)
         return next_state

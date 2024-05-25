@@ -54,10 +54,17 @@ def get_case(name: str, simulator: str):
     # to be procedurally generated
     assert num_rows == 1
     # Procedurally generate a single row wind farm
-    case = FarmRowFastfarm() if simulator_index == 0 else FarmRowFloris()
-    case.num_turbines = num_turbines
-    case.xcoords = case.get_xcoords(num_turbines)
-    case.ycoords = case.get_ycoords(num_turbines)
+    cls = FarmRowFastfarm if simulator_index == 0 else FarmRowFloris
+    case = cls(
+        num_turbines=num_turbines,
+        xcoords=cls.get_xcoords(num_turbines),
+        ycoords=cls.get_ycoords(num_turbines),
+        dt=cls.dt,
+        t_init=cls.t_init,
+        buffer_window=cls.buffer_window,
+        set_wind_direction=cls.set_wind_direction,
+        set_wind_speed=cls.set_wind_speed,
+    )
     return case
 
 

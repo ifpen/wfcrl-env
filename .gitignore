@@ -13,3 +13,4 @@ src/cases/__pycache__/*
 build/*
 WFCRL.egg-info/*
 kernel-wfcrl/*
+__simul__/*

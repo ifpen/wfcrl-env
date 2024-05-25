@@ -1,3 +1,5 @@
+import time
+import warnings
 from abc import ABC
 from typing import Dict, Iterable, List
 
@@ -11,7 +13,10 @@ from wfcrl.simul_utils import (
     create_dll,
     create_ff_case,
     create_floris_case,
+    get_inflow_file_path,
+    read_inflow_info,
     read_simul_info,
+    write_inflow_info,
 )
 
 
@@ -248,36 +253,34 @@ class MPI_Interface(BaseInterface):
         return self._current_torque_command.copy()[1:]
 
     def avg_farm_power(self, window: int = None):
-        powers = self.avg_powers(window)
+        powers = self.avg_powers(window).squeeze()
         return powers.sum()
 
     def avg_powers(self, window: int = None) -> List:
         if window is None:
             window = self._default_avg_window
-        return self._power_buffers.get_agg(window)
+        return self._power_buffers.get_agg(window).squeeze()
 
     def avg_wind(self, window: int = None) -> List:
         if window is None:
             window = self._default_avg_window
-        return self._wind_buffers.get_agg(window)
+        return self._wind_buffers.get_agg(window).squeeze()
 
     def last_powers(self, window: int = 0) -> np.ndarray:
-        return self._power_buffers.get_all(window)
+        return self._power_buffers.get_all(window).squeeze()
 
     def last_wind(self, window: int = 0) -> np.ndarray:
-        return self._wind_buffers.get_all(window)
+        return self._wind_buffers.get_all(window).squeeze()
 
     def get_measure(self, measure: str) -> np.ndarray:
-        if measure == "wind_measurements":
-            return self.last_wind()
-        return self.current_measures[:, self.measure_map[measure]]
+        if measure == "freewind_measurements":
+            return self.last_wind().squeeze()
+        return self.current_measures[:, self.measure_map[measure]].squeeze()
 
     def get_all_measures(self) -> Dict:
         df = pd.DataFrame(self.current_measures, columns=self.measure_names)
         # convert angles to degrees
-        df[["wind_direction", "yaw", "pitch"]] = np.degrees(
-            df[["wind_direction", "yaw", "pitch"]]
-        )
+        df[["yaw", "pitch"]] = np.degrees(df[["yaw", "pitch"]])
         return df
 
     def _wait_for_sim_output(self):
@@ -289,16 +292,26 @@ class MPI_Interface(BaseInterface):
         self._comm.Barrier()
         measures = measures.reshape((self.num_turbines, self._num_measures))
         # print(f"Received measures matrix from simulator: {measures}")
-        speeds = measures[:, self.measure_map["wind_speed"]].flatten()
+
+        # format wind directions - keep wind direction positive
         directions = measures[:, self.measure_map["wind_direction"]].flatten()
+        directions = np.degrees(directions) - 90
+        directions[directions < 0] = directions[directions < 0] + 360
+        measures[:, self.measure_map["wind_direction"]] = directions
+
+        # retrieve wind speeds and power outputs
+        speeds = measures[:, self.measure_map["wind_speed"]].flatten()
         powers = measures[:, self.measure_map["power"]].flatten()
+
+        # get upstream point = point of maximum speed
         upstream_point = np.argmax(speeds)
         wspeed = speeds[upstream_point]
-        wdir = np.degrees(directions[upstream_point])
-        wdir = wdir - 90
+        wdir = directions[upstream_point]
+        # wdir = np.degrees(directions[upstream_point])
+        # wdir = wdir - 90
         # Keep wind direction positive
-        if wdir < 0:
-            wdir = wdir + 360
+        # if wdir < 0:
+        #     wdir = wdir + 360
         self.current_measures = measures
         return powers.astype(np.float32), np.array([wspeed, wdir], dtype=np.float32)
 
@@ -315,7 +328,7 @@ class FastFarmInterface(MPI_Interface):
         "pitch": 4,
         "torque": 5,
         "load": [6, 7, 8, 9, 10, 11],
-        "wind_measurements": None,
+        "freewind_measurements": None,
     }
 
     def __init__(
@@ -330,6 +343,7 @@ class FastFarmInterface(MPI_Interface):
     ):
         self._path_to_fastfarm_exe = fast_farm_executable
         self._simul_file = fstf_file
+        self._inflow_file = get_inflow_file_path(fstf_file)
 
         super().__init__(
             default_avg_window=default_avg_window,
@@ -375,6 +389,11 @@ class FastFarmInterface(MPI_Interface):
         log_file: str = None,
         output_dir: str = None,
     ):
+        if output_dir is None:
+            name = f"{case.simulator}__{case.t_init + case.max_iter * case.dt}s"
+            name += f"__{case.num_turbines}T_{time.time()}"
+            output_dir = f"__simul__/fastfarm/{name}/"
+
         fstf_file = create_ff_case(
             case.dict(),
             output_dir=output_dir,
@@ -390,7 +409,19 @@ class FastFarmInterface(MPI_Interface):
             fast_farm_executable=fast_farm_executable,
         )
 
-    def init(self):
+    def init(self, wind_speed: float = None, wind_direction: float = None):
+        # wind speed and direction ignored for now
+        if wind_direction is not None:
+            warnings.warn(
+                f"Wind direction = {wind_direction} requested, but FastFarmInterface"
+                "cannot set wind direction in the simulator. Request will be ignored."
+            )
+
+        if wind_speed is not None:
+            simul_wind_speed = read_inflow_info(self._inflow_file)
+            if simul_wind_speed != wind_speed:
+                write_inflow_info(self._inflow_file, float(wind_speed))
+
         print("Spawning process", self._path_to_fastfarm_exe, self._simul_file)
         spawn_comm = MPI.COMM_SELF.Spawn(
             self._path_to_fastfarm_exe, args=[self._simul_file], maxprocs=1
@@ -402,7 +433,15 @@ class FastFarmInterface(MPI_Interface):
 class FlorisInterface(BaseInterface):
     CONTROL_SET = ["yaw"]
     # `wind_measurements` handled separately
-    DEFAULT_MEASURE_MAP = {"yaw": 0, "wind_measurements": None}
+
+    DEFAULT_MEASURE_MAP = {
+        "yaw": 0,
+        "wind_speed": 1,
+        "wind_direction": 2,
+        "load": [3, 4, 5, 6],
+        "freewind_measurements": None,
+    }
+
     YAW_TAG = 1
     PITCH_TAG = 2
     TORQUE_TAG = 3
@@ -415,20 +454,25 @@ class FlorisInterface(BaseInterface):
         simul_file: str,
         max_iter: int = int(1e4),
         log_file: str = None,
+        wind_speed: float = None,
+        wind_direction: float = None,
     ):
         super().__init__()
 
         self.num_turbines = num_turbines
         self.fi = tools.FlorisInterface(simul_file)
-        self.fi.reinitialize()
-        self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
         self.measure_map = self.DEFAULT_MEASURE_MAP
-        self.current_measures = (
-            np.zeros((self.num_turbines, len(self.measure_map) - 1)) * np.nan
+        self._num_measures = sum(
+            [
+                len(indices) if isinstance(indices, list) else 1
+                for indices in self.measure_map.values()
+            ]
         )
-        self._num_iter = 0
+        self._num_measures -= 1
+        self.dt = 60
         self.max_iter = max_iter
         self._logging = False
+        self.init(wind_speed, wind_direction)
         if log_file is not None:
             self._log_file = log_file
             self._logging = True
@@ -440,12 +484,19 @@ class FlorisInterface(BaseInterface):
         log_file: str = None,
         output_dir: str = None,
     ):
+        if output_dir is None:
+            name = f"{case.simulator}__{case.t_init + case.max_iter * case.dt}s"
+            name += f"__{case.num_turbines}T_{time.time()}"
+            output_dir = f"__simul__/floris/{name}/"
+
         simul_file = create_floris_case(case.dict(), output_dir=output_dir)
         return cls(
             num_turbines=case.num_turbines,
             simul_file=simul_file,
             max_iter=case.max_iter,
             log_file=log_file,
+            wind_speed=float(case.simul_params["speed"]),
+            wind_direction=float(case.simul_params["direction"]),
         )
 
     @property
@@ -463,7 +514,19 @@ class FlorisInterface(BaseInterface):
         if yaw is not None:
             self._current_yaw_command[0, 0, :] = yaw.astype(np.double)
         self.fi.calculate_wake(yaw_angles=self._current_yaw_command)
-        self.current_measures[:, 0] = self.fi.floris.farm.yaw_angles
+        self.current_measures[
+            :, self.measure_map["yaw"]
+        ] = self.fi.floris.farm.yaw_angles
+        wind_measures_indices = [
+            self.measure_map["wind_speed"],
+            self.measure_map["wind_direction"],
+        ]
+        self.current_measures[:, wind_measures_indices] = np.array(
+            self.local_wind_measurements()
+        ).T
+        self.current_measures[:, self.measure_map["load"]] = (
+            np.array(self.local_load_proxies()).T * 1e7
+        )
         self._num_iter += 1
         if self._logging:
             with open(self._log_file, "a") as fp:
@@ -474,11 +537,15 @@ class FlorisInterface(BaseInterface):
                 )
         return self._num_iter == self.max_iter
 
-    def init(self):
+    def init(self, wind_speed: float = None, wind_direction: float = None):
+        self.fi.reinitialize(
+            wind_speeds=[wind_speed] if wind_speed is not None else None,
+            wind_directions=[wind_direction] if wind_direction is not None else None,
+        )
         self._num_iter = 0
         self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
         self.current_measures = (
-            np.zeros((self.num_turbines, len(self.measure_map) - 1)) * np.nan
+            np.zeros((self.num_turbines, self._num_measures)) * np.nan
         )
 
     def get_yaw_command(self):
@@ -492,11 +559,39 @@ class FlorisInterface(BaseInterface):
         return self.fi.get_turbine_powers().flatten()
 
     def avg_wind(self) -> List:
-        return np.array([self.wind_speed, self.wind_dir])
+        """returns average free-stream wind"""
+        return np.array([self.wind_speed, self.wind_dir]).squeeze()
+
+    def local_load_proxies(self) -> np.ndarray:
+        """we use local turbulences and wind speed variations on the rotors
+        as expressed by standard deviation as proxies for loads"""
+        turbulences = self.fi.floris.flow_field.turbulence_intensity_field.squeeze()
+        # wind speed variations along the 3 axes - standard deviation on rotor speed
+        var_u = np.std(self.fi.floris.flow_field.u, (3, 4)).squeeze()
+        var_v = np.std(self.fi.floris.flow_field.v, (3, 4)).squeeze()
+        var_w = np.std(self.fi.floris.flow_field.w, (3, 4)).squeeze()
+        return turbulences, var_u, var_v, var_w
+
+    def local_wind_measurements(self) -> np.ndarray:
+        # u (np.array): x-component of velocity.
+        # v (np.array): y-component of velocity.
+        # w (np.array): z-component of velocity.
+        velocities = np.cbrt(np.mean(self.fi.floris.flow_field.u**3, axis=(3, 4)))
+        directions = self.wind_dir - np.degrees(
+            np.arctan2(self.fi.floris.flow_field.v, self.fi.floris.flow_field.u)
+        )
+        directions = np.mean(directions, axis=(3, 4))
+        return velocities.squeeze(), directions.squeeze()
 
     def get_measure(self, measure: str) -> np.ndarray:
         if measure not in self.measure_map:
             return None
-        if measure == "wind_measurements":
+        if measure == "freewind_measurements":
             return self.avg_wind()
         return self.current_measures[:, self.measure_map[measure]]
+
+    def get_parameters(self):
+        pass
+
+    def sample_parameters(self):
+        pass
