@@ -78,9 +78,7 @@ envs.list_envs()
 |---|---|
 |  Ablaincourt |  Inspired by layout of the Ablaincourt farm in France, (Duc et al, 2019) |
 |  Turb16_TCRWP |  Layout of the [Total Control Reference Wind Power Plant](https://farmconners.readthedocs.io/en/latest/provided_data_sets.html) (TC RWP) (the first 16 turbines) |
-| Turb3_Row1  |  Custom case - Single row of 3 turbines |
 | Turb6_Row2   |  Custom case - 2 rows of 6 turbine |
-| Turb16_Row5   | Layout of the first 16 turbines in the the CL-Windcon project [as implemented in WFSim](https://github.com/TUDelft-DataDrivenControl/WFSim/blob/master/layoutDefinitions/layoutSet_clwindcon_80turb.m)|
 | Turb32_Row5   | Layout of the first 32 turbines in the the CL-Windcon project [as implemented in WFSim](https://github.com/TUDelft-DataDrivenControl/WFSim/blob/master/layoutDefinitions/layoutSet_clwindcon_80turb.m)  |
 | TurbX_Row1 for X in [1, 12] | Procedurally generated single row layout with X turbines  |
 

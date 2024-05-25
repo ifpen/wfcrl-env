@@ -42,6 +42,7 @@ def create_floris_case(case: Dict, output_dir=None):
         config["flow_field"]["wind_directions"] = [case["direction"]]
     if case["speed"] is not None:
         config["flow_field"]["wind_speeds"] = [case["speed"]]
+    output_dir.mkdir(parents=True)
     with open(output_dir / "case.yaml", "w") as fp:
         yaml.safe_dump(config, fp)
     return str(output_dir / "case.yaml")
@@ -52,6 +53,25 @@ def read_simul_info(fstf_file):
     num_iter = fstf["TMax"] // fstf["DT_Low"]
     num_turbines = fstf["NumTurbines"]
     return num_turbines, num_iter
+
+
+def get_inflow_file_path(fstf_file):
+    fstf = FASTInputFile(fstf_file)
+    inflow_file_name = fstf["InflowFile"].replace('"', "")
+    inflow_file_path = (Path(fstf_file).parent / inflow_file_name).resolve()
+    return inflow_file_path
+
+
+def read_inflow_info(inflow_file):
+    inflow = FASTInputFile(inflow_file)
+    return inflow["HWindSpeed"]
+
+
+def write_inflow_info(inflow_file, wind_speed):
+    inflow = FASTInputFile(inflow_file)
+    inflow["HWindSpeed"] = wind_speed
+    inflow.write(os.path.join(inflow_file))
+    return inflow_file
 
 
 def create_dll(fstf_file):
@@ -160,8 +180,12 @@ def create_ff_case(case: Dict, output_dir=None):
             meanUAtHubHeight=True,
         )
     else:
+        if case["speed"] is not None:
+            inflow["HWindSpeed"] = case["speed"]
         mean_wind = inflow["HWindSpeed"]
-        ny, nz = fstf["NY_Low"] - 1, fstf["NZ_Low"] - 1
+        min_width = max(ycoords) - min(ycoords)
+        min_ny = int(np.ceil(min_width / fstf["dY_Low"]))
+        ny, nz = max(min_ny, fstf["NY_Low"] - 1), fstf["NZ_Low"] - 1
         width, height = fstf["dY_Low"] * ny, fstf["dZ_Low"] * nz
         time = 200
         y = np.linspace(-width / 2, width / 2, ny)
@@ -211,6 +235,8 @@ def create_ff_case(case: Dict, output_dir=None):
         shutil.copy2(file, f"{output_dir}FarmInputs/")
     for file in glob.glob(f"{template_dir}FarmInputs/*.dat"):
         shutil.copy2(file, f"{output_dir}FarmInputs/")
+    # Write InflowWind
+    inflow.write(os.path.join(f"{output_dir}FarmInputs/", "InflowWind.dat"))
     # Get needed .fst files
     out_fstf = FASTInputFile(outputFSTF)
     out_fstf.write(outputFSTF)

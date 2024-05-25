@@ -37,9 +37,10 @@ class WindFarmEnv(gym.Env):
         self.max_num_steps = max_num_steps
         self.reward_shaper = reward_shaper
         self.controls = controls
+        self.dt = farm_case.dt
 
     def reset(self, seed=None, options=None):
-        self.mdp.reset()
+        self.mdp.reset(seed, options)
         self._state = self.mdp.start_state
         self.reward_shaper.reset()
         observation = copy.deepcopy(self._state)

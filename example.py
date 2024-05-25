@@ -5,7 +5,7 @@ from wfcrl.rewards import StepPercentage
 
 env = envs.make(
     "Dec_Ablaincourt_Fastfarm",
-    max_num_steps=10,
+    max_num_steps=100,
     controls=["yaw", "pitch"],
     reward_shaper=StepPercentage(),
 )

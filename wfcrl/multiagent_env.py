@@ -1,4 +1,5 @@
 import functools
+from collections import OrderedDict
 
 import numpy as np
 from gymnasium import spaces
@@ -24,6 +25,10 @@ class MAWindFarmEnv(AECEnv):
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
+        """
+        fix_wind_conditions: if False, new wind speeds and directions
+                             are sampled at each call to reset()
+        """
         self.mdp = WindFarmMDP(
             interface=interface,
             farm_case=farm_case,
@@ -38,6 +43,8 @@ class MAWindFarmEnv(AECEnv):
         self.num_turbines = self.mdp.num_turbines
         self.reward_shaper = reward_shaper
         self.controls = controls
+        self.farm_case = farm_case
+        self.state_space = self.mdp.state_space
 
         # Init AEC properties
         self.possible_agents = [
@@ -65,12 +72,9 @@ class MAWindFarmEnv(AECEnv):
         self._action_spaces = {}
         for i, agent in enumerate(self.possible_agents):
             self._obs_spaces[agent] = {
-                key: (
-                    space
-                    if key == "wind_measurements"
-                    else spaces.Box(space.low[i], space.high[i])
-                )
+                key: spaces.Box(space.low[i], space.high[i])
                 for key, space in self.mdp.state_space.items()
+                if key != "freewind_measurements"
             }
             if self.continuous_control:
                 self._action_spaces[agent] = {
@@ -101,10 +105,11 @@ class MAWindFarmEnv(AECEnv):
         at any time after reset() is called.
         """
         global_state = self.state()
-        agent_state = {}
-        agent_state["wind_measurements"] = global_state["wind_measurements"]
+        agent_state = OrderedDict()
+        # no freewind in local states !
+        # agent_state["freewind_measurements"] = global_state["freewind_measurements"]
         for key, partial_state in global_state.items():
-            if key != "wind_measurements":
+            if key != "freewind_measurements":
                 agent_state[key] = partial_state[self.agent_name_mapping[agent]]
         return agent_state
 
@@ -120,19 +125,55 @@ class MAWindFarmEnv(AECEnv):
         And must set up the environment so that render(), step(), and observe()
         can be called without issues.
         """
-        self.mdp.reset()
+
+        # sample wind_speed and wind_direction
+        self.rng = np.random.default_rng(seed)
+        wind_speed, wind_direction = None, None
+        if (options is not None) and "wind_speed" in options:
+            wind_speed = options["wind_speed"]
+        elif not self.farm_case.set_wind_speed:
+            wind_speed = 8 * self.rng.weibull(8)
+            obs_space = self.observation_space(self.possible_agents[0])["wind_speed"]
+            wind_speed = np.clip(
+                wind_speed,
+                obs_space.low,
+                obs_space.high,
+            )
+        if (options is not None) and "wind_direction" in options:
+            wind_direction = options["wind_direction"]
+        elif not self.farm_case.set_wind_direction:
+            wind_direction = self.rng.normal(270, 20) % 360
+            obs_space = self.observation_space(self.possible_agents[0])[
+                "wind_direction"
+            ]
+            wind_direction = np.clip(
+                wind_direction,
+                obs_space.low,
+                obs_space.high,
+            )
+
+        self.mdp.reset(wind_speed, wind_direction)
         self._state = self.mdp.start_state
         self.reward_shaper.reset()
 
         self.agents = self.possible_agents[:]
         self._num_steps = {agent: 0 for agent in self.agents}
         self.rewards = {agent: np.array([0.0]) for agent in self.agents}
-        self._cumulative_rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: np.array([0.0]) for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
         self.actions = {agent: None for agent in self.agents}
         self.observations = {agent: self.observe(agent) for agent in self.agents}
+        self.constrained = {agent: self.observe(agent) for agent in self.agents}
+        accumulated_actions = self.mdp.get_accumulated_actions()
+        self.accumulated_actions = {
+            agent: {
+                control: accumulated_actions[control][id_agent]
+                for control in accumulated_actions
+            }
+            for id_agent, agent in enumerate(self.agents)
+        }
         self.num_moves = 0
         """
         Init agent selector
@@ -155,10 +196,12 @@ class MAWindFarmEnv(AECEnv):
         assert self._state is not None, "Call reset before `step`"
 
         agent = self.agent_selection
+
         self._num_steps[agent] += 1
 
         # TODO: allow for different control for each agent
         # For now, every local action must send a command for ALL controls
+        # and agents with partial control have to send dummy actions
         for control in action:
             if control not in self.mdp.controls:
                 raise ValueError(
@@ -171,6 +214,19 @@ class MAWindFarmEnv(AECEnv):
                 f" List of needed controls: {self.mdp.controls.keys()}"
             )
 
+        # Check if current constraints allow action
+        # cannot be actuating more than 10% of the time
+        agent_accumulator = self.accumulated_actions[agent]
+        for control in action:
+            if not (control in self.mdp.ACTUATORS_RATE):
+                continue
+            actuating_time = (
+                agent_accumulator[control] / self.mdp.ACTUATORS_RATE[control]
+            )
+            actuating_frac = actuating_time / self._num_steps[agent] / self.farm_case.dt
+            if actuating_frac >= 0.1:
+                action[control][:] = 0.0
+
         # restart reward accumulation
         self._cumulative_rewards[agent] = 0
         # stores action of current agent
@@ -178,29 +234,44 @@ class MAWindFarmEnv(AECEnv):
 
         # collect reward when all agents have taken an action
         if self._agent_selector.is_last():
+            if any(self.truncations.values()) or all(self.terminations.values()):
+                self.agents = []
             next_state, powers, loads, truncated = self.mdp.take_action(
                 self._state, self._join_actions(self.actions)
             )
-            reward = np.array([self.reward_shaper(powers.sum())])
+            # normalize by initial freestream wind
+            normalized_powers = (
+                powers * 1e3 / (self.state()["freewind_measurements"][0] ** 3)
+            )
+            load_penalty = 0
+            if loads is not None:
+                load_penalty = np.mean(np.abs(loads))
+            reward = normalized_powers.mean() - 0.1 * load_penalty
+            reward = np.array([self.reward_shaper(reward)])
             self._state = next_state
             for agent in self.agents:
+                if loads is not None:
+                    self.infos[agent]["load"] = loads[self.agent_name_mapping[agent]]
                 # cooperative env: same reward for everybody
-                # might change later to account for fatigue
+                # might change later to account for specific fatigue
                 self.rewards[agent] = reward
                 self.observations[agent] = self.observe(agent)
                 self.truncations[agent] = truncated
                 self.terminations[agent] = False
-                self.infos[agent] = {
-                    "power": powers[self.agent_name_mapping[agent]],
-                }
-                if loads is not None:
-                    self.infos[agent]["load"] = loads[self.agent_name_mapping[agent]]
+                self.infos[agent]["power"] = powers[self.agent_name_mapping[agent]]
+
             if truncated:
                 self.agents = []
             self.num_moves += 1
         else:
             # no reward allocated until all players take an action
             self._clear_rewards()
+
+        # accumulate action for constraint checking
+        accumulator = self.mdp.get_accumulated_actions()
+        for control in action:
+            acc = accumulator[control][self.agent_name_mapping[agent]]
+            self.accumulated_actions[agent][control] = acc
 
         # selects the next agent.
         self.agent_selection = self._agent_selector.next()
