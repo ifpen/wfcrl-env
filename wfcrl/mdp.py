@@ -115,7 +115,7 @@ class WindFarmMDP:
             )
 
         # Setup state space
-        state_space_dict = {}
+        state_space_dict = OrderedDict()
         bound_array = np.ones(self.num_turbines, dtype=np.float32)
         low_ws, high_ws = self.DEFAULT_BOUNDS["wind_speed"]
         (
@@ -146,19 +146,6 @@ class WindFarmMDP:
             for control in controls
         }
 
-        # Take first steps in the interface until start_iter
-        # for t in range(start_iter + 1):
-        #     self.interface.update_command()
-        # # Retrieve state at start_iter
-        # start_state = OrderedDict(
-        #     {attr: self.interface.get_measure(attr) for attr in self.state_attributes}
-        # )
-        # # print(f"Start state {start_state}")
-
-        # self.
-        # self.start_state = clip_to_dict_space(start_state, self.state_space)
-        # print(f"Init MDP with start state {self.start_state}")
-
     def get_state_powers(self):
         return self.interface.avg_powers()
 
@@ -166,7 +153,7 @@ class WindFarmMDP:
         return self._actuation_accumulator.copy()
 
     def _cast_dict_array(self, state):
-        state_cast = {}
+        state_cast = OrderedDict()
         for attr, value in state.items():
             state_cast[attr] = value.astype(np.float32)
         return state_cast
@@ -245,7 +232,7 @@ class WindFarmMDP:
         return self.start_state
 
     def step_interface(self, state: Dict):
-        step_dict = {}
+        step_dict = OrderedDict()
         for control in self.controls:
             step_dict[control] = state[control]
         done = self.interface.update_command(**step_dict)

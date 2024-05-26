@@ -1,4 +1,5 @@
 import functools
+from collections import OrderedDict
 
 import numpy as np
 from gymnasium import spaces
@@ -43,7 +44,7 @@ class MAWindFarmEnv(AECEnv):
         self.reward_shaper = reward_shaper
         self.controls = controls
         self.farm_case = farm_case
-        self.global_state_space = self.mdp.state_space
+        self.state_space = self.mdp.state_space
 
         # Init AEC properties
         self.possible_agents = [
@@ -104,7 +105,7 @@ class MAWindFarmEnv(AECEnv):
         at any time after reset() is called.
         """
         global_state = self.state()
-        agent_state = {}
+        agent_state = OrderedDict()
         # no freewind in local states !
         # agent_state["freewind_measurements"] = global_state["freewind_measurements"]
         for key, partial_state in global_state.items():
@@ -175,10 +176,6 @@ class MAWindFarmEnv(AECEnv):
         """
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
-
-    @property
-    def global_state(self):
-        return self._state
 
     def step(self, action):
         """
