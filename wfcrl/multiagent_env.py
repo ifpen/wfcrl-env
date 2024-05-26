@@ -240,16 +240,21 @@ class MAWindFarmEnv(AECEnv):
                 self._state, self._join_actions(self.actions)
             )
             # normalize by initial freestream wind
-            normalized_powers = powers / self.state()["freewind_measurements"][0] ** 3
-            reward = np.array([self.reward_shaper(normalized_powers.sum())])
+            normalized_powers = (
+                powers * 1e3 / (self.state()["freewind_measurements"][0] ** 3)
+            )
+            load_penalty = 0
+            if loads is not None:
+                load_penalty = np.sum(np.abs(loads))
+            reward = normalized_powers.mean() - 0.5 * load_penalty
+            reward = np.array([self.reward_shaper(reward)])
             self._state = next_state
             for agent in self.agents:
                 if loads is not None:
                     self.infos[agent]["load"] = loads[self.agent_name_mapping[agent]]
-                    load_penalty = np.sum(np.abs(loads))
                 # cooperative env: same reward for everybody
                 # might change later to account for specific fatigue
-                self.rewards[agent] = reward - 0.5 * load_penalty
+                self.rewards[agent] = reward
                 self.observations[agent] = self.observe(agent)
                 self.truncations[agent] = truncated
                 self.terminations[agent] = False
