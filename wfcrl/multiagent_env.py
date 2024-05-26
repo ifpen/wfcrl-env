@@ -129,7 +129,9 @@ class MAWindFarmEnv(AECEnv):
         # sample wind_speed and wind_direction
         self.rng = np.random.default_rng(seed)
         wind_speed, wind_direction = None, None
-        if not self.farm_case.set_wind_speed:
+        if (options is not None) and "wind_speed" in options:
+            wind_speed = options["wind_speed"]
+        elif not self.farm_case.set_wind_speed:
             wind_speed = 8 * self.rng.weibull(8)
             obs_space = self.observation_space(self.possible_agents[0])["wind_speed"]
             wind_speed = np.clip(
@@ -137,7 +139,9 @@ class MAWindFarmEnv(AECEnv):
                 obs_space.low,
                 obs_space.high,
             )
-        if not self.farm_case.set_wind_direction:
+        if (options is not None) and "wind_direction" in options:
+            wind_direction = options["wind_direction"]
+        elif not self.farm_case.set_wind_direction:
             wind_direction = self.rng.normal(270, 20) % 360
             obs_space = self.observation_space(self.possible_agents[0])[
                 "wind_direction"
@@ -235,7 +239,9 @@ class MAWindFarmEnv(AECEnv):
             next_state, powers, loads, truncated = self.mdp.take_action(
                 self._state, self._join_actions(self.actions)
             )
-            reward = np.array([self.reward_shaper(powers.sum())])
+            # normalize by initial freestream wind
+            normalized_powers = powers / self.state()["freewind_measurements"][0] ** 3
+            reward = np.array([self.reward_shaper(normalized_powers.sum())])
             self._state = next_state
             for agent in self.agents:
                 if loads is not None:

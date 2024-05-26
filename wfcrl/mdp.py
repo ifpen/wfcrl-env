@@ -237,14 +237,12 @@ class WindFarmMDP:
             step_dict[control] = state[control]
         done = self.interface.update_command(**step_dict)
         powers = self.get_state_powers()
-        # normalize by initial freestream wind
-        powers /= self.start_state["freewind_measurements"][0] ** 3
         for measure in self.measures:
             state[measure] = self.interface.get_measure(measure)
         loads = self.interface.get_measure("load")
         if loads is not None:
             loads /= 1e7
-        return state, powers / 1e3, loads, done
+        return state, powers / 1e6, loads, done
 
     def take_action(self, state: Dict, joint_action: Dict):
         next_state = self.get_controlled_state_transition(state, joint_action)
