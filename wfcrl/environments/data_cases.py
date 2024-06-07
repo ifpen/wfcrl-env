@@ -107,7 +107,7 @@ fastfarm_3t = FastFarmCase(
 )
 floris_3t = FlorisCase(
     num_turbines=3,
-    xcoords=[400.0, 1000.0, 1600.0],
+    xcoords=[0.0, 504.0, 1008.0],
     ycoords=[0.0, 0.0, 0.0],
     dt=60,
     buffer_window=1,
