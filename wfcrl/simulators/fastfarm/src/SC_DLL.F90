@@ -138,7 +138,6 @@ subroutine SC_CalcOutputs ( t, nTurbines, nParamGlobal, paramGlobal, nParamTurbi
    ! so I've added the compiler directive IMPLICIT_DLLEXPORT.
 
 use, intrinsic :: ISO_C_Binding
-use algoCont !appel du module
 
 !use typeConf
 
@@ -182,7 +181,7 @@ use algoCont !appel du module
    ! For MPI communication
    integer this_process_rank, size_of_cluster, ierror
    !integer initialized
-   integer initialized, finalized
+   logical initialized, finalized
    integer message
    integer yaw_tag, pitch_tag, torque_tag, com_tag, measures_tag
    integer, save :: parent_comm
@@ -193,8 +192,8 @@ use algoCont !appel du module
    integer, dimension(MPI_STATUS_SIZE) :: statut
 
 
-   initialized = 0
-   finalized = 0
+   initialized = .false.
+   finalized = .false.
 
    ! MPI comm tags
    yaw_tag = 1

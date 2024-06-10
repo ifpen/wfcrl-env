@@ -1,3 +1,4 @@
+import platform
 import time
 import warnings
 from abc import ABC
@@ -317,7 +318,11 @@ class MPI_Interface(BaseInterface):
 
 
 class FastFarmInterface(MPI_Interface):
-    default_exe_path = "simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe"
+    system_type = platform.platform().lower()
+    if system_type == "Windows":
+        default_exe_path = "simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe"
+    else:
+        default_exe_path = "FAST.Farm"
     # `wind_measurements` is not read from the simulator
     # but computed by the interface
     measure_map = {
