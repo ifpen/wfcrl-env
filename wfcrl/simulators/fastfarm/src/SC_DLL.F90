@@ -225,7 +225,7 @@ use, intrinsic :: ISO_C_Binding
       ! Send a message giving the number of measures given at every iteration
       call MPI_SEND(NumCtrl2SC, 1, MPI_INT, command_process_rank, com_tag, parent_comm, ierror)
       ! Receive the number of iterations
-      call MPI_RECV(max_iter, 1, MPI_INT, command_process_rank, com_tag, parent_comm, statut, ierror)
+      call MPI_RECV(max_iter, 1, MPI_DOUBLE, command_process_rank, com_tag, parent_comm, statut, ierror)
       print *, "Will receive MPI interface control for ", max_iter, " iterations"
    end if
 
