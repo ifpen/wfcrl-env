@@ -186,7 +186,7 @@ use, intrinsic :: ISO_C_Binding
    integer yaw_tag, pitch_tag, torque_tag, com_tag, measures_tag
    integer, save :: parent_comm
    integer, save :: command_process_rank
-   integer, save :: max_iter
+   REAL(C_DOUBLE) :: max_iter
    integer, save :: num_iter = 0
 
    integer, dimension(MPI_STATUS_SIZE) :: statut

@@ -14,6 +14,9 @@ include = ['wfcrl*']
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
+[project.scripts]
+wfcrl-simulator = "wfcrl.scripts:install_simulator"
+
 [project]
 name = "WFCRL"
 version = "0.0.1"
