@@ -1,0 +1,1 @@
+from wfcrl.scripts.install_simulators import install_simulator
