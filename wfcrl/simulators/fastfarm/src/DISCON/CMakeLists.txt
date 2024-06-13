@@ -86,10 +86,10 @@ if(APPLE)
   set(CMAKE_MACOSX_RPATH 1)
 endif()
 
-add_library(DISCON_WT1 SHARED ${SOURCE_PATH})
-set_target_properties(DISCON_WT1 PROPERTIES PREFIX "" SUFFIX ".dll")
+add_library(DISCON SHARED ${SOURCE_PATH})
+set_target_properties(DISCON PROPERTIES PREFIX "" SUFFIX ".dll")
 
 # if this project is built standlone
 # if (${CMAKE_CURRENT_LIST_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
-set(INSTALL_DEST "${CMAKE_SOURCE_DIR}/..")
+set(INSTALL_DEST "${CMAKE_SOURCE_DIR}/../../servo_dll")
 install(TARGETS DISCON DESTINATION ${INSTALL_DEST})

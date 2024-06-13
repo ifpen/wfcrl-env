@@ -98,6 +98,6 @@ set_target_properties(SC_DLL PROPERTIES PREFIX "" SUFFIX ".dll")
 
 # if this project is built standlone
 # if (${CMAKE_CURRENT_LIST_DIR} STREQUAL ${CMAKE_SOURCE_DIR})
-set(INSTALL_DEST "${CMAKE_SOURCE_DIR}/..")
+set(INSTALL_DEST "${CMAKE_SOURCE_DIR}/../../servo_dll")
 
 install(TARGETS SC_DLL DESTINATION ${INSTALL_DEST})
