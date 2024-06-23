@@ -221,7 +221,7 @@ class MPI_Interface(BaseInterface):
             num_measures, source=self._target_process_rank, tag=self.COM_TAG
         )
         self._comm.Send(
-            buf=np.array([self.max_iter], dtype=int),
+            buf=np.array([self.max_iter], dtype=np.double),
             dest=self._target_process_rank,
             tag=self.COM_TAG,
         )
@@ -318,8 +318,8 @@ class MPI_Interface(BaseInterface):
 
 
 class FastFarmInterface(MPI_Interface):
-    system_type = platform.platform().lower()
-    if system_type == "Windows":
+    system_type = platform.system().lower()
+    if system_type == "windows":
         default_exe_path = "simulators/fastfarm/bin/FAST.Farm_x64_OMP_2023.exe"
     else:
         default_exe_path = "FAST.Farm"
