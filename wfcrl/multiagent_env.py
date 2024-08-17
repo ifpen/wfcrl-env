@@ -131,7 +131,9 @@ class MAWindFarmEnv(AECEnv):
         wind_speed, wind_direction = None, None
         if (options is not None) and "wind_speed" in options:
             wind_speed = options["wind_speed"]
-        elif not self.farm_case.set_wind_speed:
+        elif not (
+            self.farm_case.set_wind_speed or bool(self.farm_case.wind_time_series)
+        ):
             wind_speed = 8 * self.rng.weibull(8)
             obs_space = self.observation_space(self.possible_agents[0])["wind_speed"]
             wind_speed = np.clip(
@@ -141,7 +143,9 @@ class MAWindFarmEnv(AECEnv):
             )
         if (options is not None) and "wind_direction" in options:
             wind_direction = options["wind_direction"]
-        elif not self.farm_case.set_wind_direction:
+        elif not (
+            self.farm_case.set_wind_direction or bool(self.farm_case.wind_time_series)
+        ):
             wind_direction = self.rng.normal(270, 20) % 360
             obs_space = self.observation_space(self.possible_agents[0])[
                 "wind_direction"

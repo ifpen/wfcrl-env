@@ -80,6 +80,7 @@ class FlorisCase(FarmCase):
     simulator: str = "Floris"
     set_wind_speed: bool = False
     set_wind_direction: bool = False
+    wind_time_series: str = None
 
     @property
     def interface_kwargs(self):
@@ -92,6 +93,7 @@ class FlorisCase(FarmCase):
             "ycoords": self.ycoords,
             "direction": 270,
             "speed": 8,
+            "wind_time_series": self.wind_time_series,
         }
 
 

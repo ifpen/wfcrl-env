@@ -92,7 +92,9 @@ def make(env_id: str, controls: Union[dict, list] = ["yaw"], log=True, **env_kwa
     simulator_class = FastFarmInterface if simulator == "Fastfarm" else FlorisInterface
     if not isinstance(controls, dict):
         controls = get_default_control(controls)
-
+    if "wind_time_series" in env_kwargs:
+        case.wind_time_series = env_kwargs["wind_time_series"]
+        del env_kwargs["wind_time_series"]
     env = env_class(
         interface=simulator_class,
         farm_case=case,

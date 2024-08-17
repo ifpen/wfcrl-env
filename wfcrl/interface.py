@@ -2,7 +2,7 @@ import platform
 import time
 import warnings
 from abc import ABC
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Union
 
 import numpy as np
 import pandas as pd
@@ -461,7 +461,12 @@ class FlorisInterface(BaseInterface):
         log_file: str = None,
         wind_speed: float = None,
         wind_direction: float = None,
+        wind_time_series: Union[str, np.ndarray] = None,
     ):
+        """
+        time_series: np.numpy array or path to csv file
+                    first column: speed, second column: direction
+        """
         super().__init__()
 
         self.num_turbines = num_turbines
@@ -477,10 +482,40 @@ class FlorisInterface(BaseInterface):
         self.dt = 60
         self.max_iter = max_iter
         self._logging = False
+
+        # Handle wind as speed / direction time series
+        self.wind_time_series = wind_time_series
+        self.wind_generator = self._make_wind_generator(
+            wind_speed, wind_direction, wind_time_series
+        )
+        wind_speed, wind_direction = next(self.wind_generator)
         self.init(wind_speed, wind_direction)
         if log_file is not None:
             self._log_file = log_file
             self._logging = True
+
+    def _make_wind_generator(
+        self, wind_speed=None, wind_direction=None, time_series=None
+    ):
+        if time_series is None:
+
+            def wind_generator():
+                while True:
+                    yield wind_speed, wind_direction
+
+        else:
+            if isinstance(time_series, str):
+                time_series = pd.read_csv(time_series).values
+            assert isinstance(time_series, np.ndarray)
+            # start at a random point in the time series
+            start = np.random.randint(0, time_series.shape[0])
+            time_series = np.r_[time_series[start:], time_series[:start]]
+
+            def wind_generator():
+                for ts in time_series:
+                    yield ts
+
+        return wind_generator()
 
     @classmethod
     def from_case(
@@ -502,6 +537,7 @@ class FlorisInterface(BaseInterface):
             log_file=log_file,
             wind_speed=float(case.simul_params["speed"]),
             wind_direction=float(case.simul_params["direction"]),
+            wind_time_series=case.simul_params["wind_time_series"],
         )
 
     @property
@@ -518,6 +554,7 @@ class FlorisInterface(BaseInterface):
     ):
         if yaw is not None:
             self._current_yaw_command[0, 0, :] = yaw.astype(np.double)
+        self.update_wind(*next(self.wind_generator))
         self.fi.calculate_wake(yaw_angles=self._current_yaw_command)
         self.current_measures[
             :, self.measure_map["yaw"]
@@ -543,10 +580,26 @@ class FlorisInterface(BaseInterface):
         return self._num_iter == self.max_iter
 
     def init(self, wind_speed: float = None, wind_direction: float = None):
-        self.fi.reinitialize(
-            wind_speeds=[wind_speed] if wind_speed is not None else None,
-            wind_directions=[wind_direction] if wind_direction is not None else None,
+        if self.wind_time_series and wind_speed is not None:
+            warnings.warn(
+                f"Wind direction = {wind_speed} requested, but wind_time_series"
+                "mode is activated. Request will be ignored."
+            )
+            wind_speed = None
+        if self.wind_time_series and wind_direction is not None:
+            warnings.warn(
+                f"Wind direction = {wind_direction} requested, but wind_time_series"
+                "mode is activated. Request will be ignored."
+            )
+            wind_direction = None
+        self.wind_generator = self._make_wind_generator(
+            wind_speed, wind_direction, self.wind_time_series
         )
+        self.update_wind(*next(self.wind_generator))
+        # self.fi.reinitialize(
+        #     wind_speeds=[wind_speed] if wind_speed is not None else None,
+        #     wind_directions=[wind_direction] if wind_direction is not None else None,
+        # )
         self._num_iter = 0
         self._current_yaw_command = np.zeros((1, 1, self.num_turbines))
         self.current_measures = (
@@ -600,3 +653,10 @@ class FlorisInterface(BaseInterface):
 
     def sample_parameters(self):
         pass
+
+    def update_wind(self, wind_speed: float = None, wind_direction: float = None):
+        wind_direction = wind_direction % 360
+        self.fi.reinitialize(
+            wind_speeds=[wind_speed] if wind_speed is not None else None,
+            wind_directions=[wind_direction] if wind_direction is not None else None,
+        )
