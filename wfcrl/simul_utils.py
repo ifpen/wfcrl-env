@@ -160,11 +160,13 @@ def create_ff_case(case: Dict, output_dir=None):
     zcoords = [0.0 for _ in xcoords]
     # Meandering constant (-)
     Cmeander = 1.9
-    # # If TurbSim is used, retrieve wind info from `.bts` file
-    if inflow["WindType"] == 3:
+    if case["wind_time_series"] is not None:
+        # # If TurbSim is used, retrieve wind info from `.bts` file
+        inflow["WindType"] = 3
+        inflow["FileName_BTS"] = f'"{case["wind_time_series"]}"'
         # TurbSim .bts file to be used in FAST.Farm simulation, needs to exist.
         BTS_filename = os.path.join(
-            f"{template_dir}FarmInputs/", inflow["FileName_BTS"].replace('"', "")
+            f"{template_dir}FarmInputs/", case["wind_time_series"]
         )
         # --- Get box extents
         FFTS = fastFarmTurbSimExtent(
@@ -180,6 +182,7 @@ def create_ff_case(case: Dict, output_dir=None):
             meanUAtHubHeight=True,
         )
     else:
+        inflow["WindType"] = 1
         if case["speed"] is not None:
             inflow["HWindSpeed"] = case["speed"]
         mean_wind = inflow["HWindSpeed"]

@@ -36,6 +36,7 @@ class FarmCase:
     max_iter: int = 100
     set_wind_speed: bool = False
     set_wind_direction: bool = False
+    wind_time_series: str = None
 
     @property
     def interface_kwargs(self):
@@ -52,6 +53,7 @@ class FastFarmCase(FarmCase):
     simulator: str = "FastFarm"
     set_wind_speed: bool = False
     set_wind_direction: bool = True
+    wind_time_series: str = None
 
     @property
     def interface_kwargs(self):
@@ -73,6 +75,7 @@ class FastFarmCase(FarmCase):
             "ycoords": self.ycoords,
             "speed": 8,
             "dt": self.dt,
+            "wind_time_series": self.wind_time_series,
         }
 
 

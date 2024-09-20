@@ -1,6 +1,7 @@
 import copy
 from collections import OrderedDict
 from typing import Dict, Iterable
+from warnings import warn
 
 import numpy as np
 from gymnasium import spaces
@@ -186,8 +187,8 @@ class WindFarmMDP:
                     " lower_bound < upper_bound"
                 )
             if len_b == 2:
-                control_dict[name] = bounds_and_step + [1]
-                raise Warning(
+                control_dict[name] = bounds_and_step + (1,)
+                warn(
                     f"No step size was provided for actuator {name}. Step size will default to 1."
                 )
             if not self.continuous_control:
