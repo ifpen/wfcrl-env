@@ -1,6 +1,6 @@
 import copy
 from collections import OrderedDict
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Type, Union
 from warnings import warn
 
 import numpy as np
@@ -53,7 +53,7 @@ class WindFarmMDP:
 
     def __init__(
         self,
-        interface: BaseInterface,
+        interface: Union[BaseInterface, Type[BaseInterface]],
         farm_case: FarmCase,
         controls: dict,
         continuous_control: bool = True,
@@ -61,7 +61,14 @@ class WindFarmMDP:
         horizon: int = int(1e6),
     ):
         farm_case.max_iter = horizon
-        if interface == MPI_Interface:
+        # if an interface is already instantiated
+        if isinstance(interface, BaseInterface):
+            self.interface = interface
+            warn(
+                "Interface already instantiated."
+                "Simulation arguments from `Farm case` will be ignored."
+            )
+        elif interface == MPI_Interface:
             # MPI_Interface connects to an already running
             # process so it does not accept
             # simulation configuration
