@@ -116,9 +116,8 @@ class WindFarmMDP:
                     name: spaces.MultiDiscrete(
                         # 3 = down, no change, up
                         [3 for _ in range(self.num_turbines)],
-                        start=[-1 for _ in range(self.num_turbines)],
                     )
-                    for name, bounds_and_step in self.controls
+                    for name, bounds_and_step in self.controls.items()
                 }
             )
 
@@ -273,7 +272,10 @@ class WindFarmMDP:
                     self.action_space[control].high,
                 )
             else:
-                command_joint_action *= self.controls[control][-1]
+                # 0, 1, 2 => DOWN, NO CHANGE, UP
+                command_joint_action *= (command_joint_action - 1) * self.controls[
+                    control
+                ][-1]
             next_state[control] = np.clip(
                 state[control] + command_joint_action,
                 self.state_space[control].low,
