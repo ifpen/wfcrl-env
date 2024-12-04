@@ -10,6 +10,7 @@ include = ['wfcrl*']
 
 [tool.setuptools.package-data]
 'wfcrl.simulators' = ["*", "**/*"]
+'wfcrl.scripts' = ["*.sh"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
