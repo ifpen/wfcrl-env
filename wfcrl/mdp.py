@@ -224,7 +224,33 @@ class WindFarmMDP:
                     f"but received {value.shape}. NUM_TURBINES = {self.num_turbines})"
                 )
 
-    def reset(self, wind_speed: float = None, wind_direction: float = None):
+    def reset(self, seed: int = None, options: dict = None):
+        # sample wind_speed and wind_direction
+        rng = np.random.default_rng(seed)
+        wind_speed, wind_direction = None, None
+        if (options is not None) and "wind_speed" in options:
+            wind_speed = options["wind_speed"]
+        elif not (
+            self.farm_case.set_wind_speed or bool(self.farm_case.wind_time_series)
+        ):
+            wind_speed = 8 * rng.weibull(8)
+            wind_speed = np.clip(
+                wind_speed,
+                self.state_space["freewind_measurements"].low[0],
+                self.state_space["freewind_measurements"].high[0],
+            )
+        if (options is not None) and "wind_direction" in options:
+            wind_direction = options["wind_direction"]
+        elif not (
+            self.farm_case.set_wind_direction or bool(self.farm_case.wind_time_series)
+        ):
+            wind_direction = rng.normal(270, 20) % 360
+            wind_direction = np.clip(
+                wind_direction,
+                self.state_space["freewind_measurements"].low[1],
+                self.state_space["freewind_measurements"].high[1],
+            )
+
         self.interface.init(wind_speed, wind_direction)
         for _ in range(self.start_iter + 1):
             self.interface.update_command()

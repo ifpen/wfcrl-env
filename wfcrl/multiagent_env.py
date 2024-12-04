@@ -25,10 +25,6 @@ class MAWindFarmEnv(AECEnv):
         start_iter: int = 0,
         max_num_steps: int = 500,
     ):
-        """
-        fix_wind_conditions: if False, new wind speeds and directions
-                             are sampled at each call to reset()
-        """
         self.mdp = WindFarmMDP(
             interface=interface,
             farm_case=farm_case,
@@ -126,37 +122,7 @@ class MAWindFarmEnv(AECEnv):
         can be called without issues.
         """
 
-        # sample wind_speed and wind_direction
-        self.rng = np.random.default_rng(seed)
-        wind_speed, wind_direction = None, None
-        if (options is not None) and "wind_speed" in options:
-            wind_speed = options["wind_speed"]
-        elif not (
-            self.farm_case.set_wind_speed or bool(self.farm_case.wind_time_series)
-        ):
-            wind_speed = 8 * self.rng.weibull(8)
-            obs_space = self.observation_space(self.possible_agents[0])["wind_speed"]
-            wind_speed = np.clip(
-                wind_speed,
-                obs_space.low,
-                obs_space.high,
-            )
-        if (options is not None) and "wind_direction" in options:
-            wind_direction = options["wind_direction"]
-        elif not (
-            self.farm_case.set_wind_direction or bool(self.farm_case.wind_time_series)
-        ):
-            wind_direction = self.rng.normal(270, 20) % 360
-            obs_space = self.observation_space(self.possible_agents[0])[
-                "wind_direction"
-            ]
-            wind_direction = np.clip(
-                wind_direction,
-                obs_space.low,
-                obs_space.high,
-            )
-
-        self.mdp.reset(wind_speed, wind_direction)
+        self.mdp.reset(seed, options)
         self._state = self.mdp.start_state
         self.reward_shaper.reset()
 

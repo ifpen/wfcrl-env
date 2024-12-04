@@ -11,6 +11,8 @@ from wfcrl.rewards import DoNothingReward, RewardShaper
 
 
 class WindFarmEnv(gym.Env):
+    metadata = {"name": "centralized-windfarm"}
+
     def __init__(
         self,
         interface: BaseInterface,
@@ -38,12 +40,17 @@ class WindFarmEnv(gym.Env):
         self.reward_shaper = reward_shaper
         self.controls = controls
         self.dt = farm_case.dt
+        self.farm_case = farm_case
+        self.accumulated_actions = self.mdp.get_accumulated_actions()
+        self.num_moves = 0
 
     def reset(self, seed=None, options=None):
         self.mdp.reset(seed, options)
         self._state = self.mdp.start_state
         self.reward_shaper.reset()
         observation = copy.deepcopy(self._state)
+        self.accumulated_actions = self.mdp.get_accumulated_actions()
+        self.num_moves = 0
         return observation
 
     def step(self, actions: Dict):
@@ -52,10 +59,28 @@ class WindFarmEnv(gym.Env):
         """
         assert self._state is not None, "Call reset before `step`"
 
+        self.num_moves += 1
+        for control in actions:
+            if not (control in self.mdp.ACTUATORS_RATE):
+                continue
+            actuating_time = (
+                self.accumulated_actions[control] / self.mdp.ACTUATORS_RATE[control]
+            )
+            actuating_frac = actuating_time / self.num_moves / self.farm_case.dt
+            actions[control][actuating_frac >= 0.1] = 0.0
+
         next_state, powers, loads, truncated = self.mdp.take_action(
             self._state, actions
         )
-        reward = np.array([self.reward_shaper(powers.sum())])
+        # normalize by initial freestream wind
+        normalized_powers = (
+            powers * 1e3 / (self._state["freewind_measurements"][0] ** 3)
+        )
+        load_penalty = 0
+        if loads is not None:
+            load_penalty = np.mean(np.abs(loads))
+        reward = normalized_powers.mean() - 0.1 * load_penalty
+        reward = np.array([self.reward_shaper(reward)])
         self._state = next_state
         terminated = False
         truncated = truncated
@@ -63,6 +88,9 @@ class WindFarmEnv(gym.Env):
         if loads is not None:
             info["load"] = loads
         observation = copy.deepcopy(self._state)
+
+        # accumulate action for constraint checking
+        self.accumulated_actions = self.mdp.get_accumulated_actions()
         return observation, reward, terminated, truncated, info
 
     def close(self):
