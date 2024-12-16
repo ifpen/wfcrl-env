@@ -186,7 +186,8 @@ use, intrinsic :: ISO_C_Binding
    integer yaw_tag, pitch_tag, torque_tag, com_tag, measures_tag
    integer, save :: parent_comm
    integer, save :: command_process_rank
-   REAL(C_DOUBLE) :: max_iter
+   REAL(C_DOUBLE) :: max_iter_com
+   integer, save :: max_iter
    integer, save :: num_iter = 0
 
    integer, dimension(MPI_STATUS_SIZE) :: statut
@@ -225,7 +226,8 @@ use, intrinsic :: ISO_C_Binding
       ! Send a message giving the number of measures given at every iteration
       call MPI_SEND(NumCtrl2SC, 1, MPI_INT, command_process_rank, com_tag, parent_comm, ierror)
       ! Receive the number of iterations
-      call MPI_RECV(max_iter, 1, MPI_DOUBLE, command_process_rank, com_tag, parent_comm, statut, ierror)
+      call MPI_RECV(max_iter_com, 1, MPI_DOUBLE, command_process_rank, com_tag, parent_comm, statut, ierror)
+      max_iter = INT(max_iter_com)
       print *, "Will receive MPI interface control for ", max_iter, " iterations"
    end if
 
@@ -249,7 +251,7 @@ use, intrinsic :: ISO_C_Binding
    ! Get control command from other MPI process
    !print *, 'Value of finalized', finalized
    if (num_iter == max_iter) then
-      print *, 'Finalize MPI'
+      print *, 'Finalizing MPI Communication...'
       if (parent_comm .ne. MPI_COMM_WORLD) then
           ! Disconnect from intercommunicator
           call MPI_COMM_DISCONNECT(parent_comm, ierror)
