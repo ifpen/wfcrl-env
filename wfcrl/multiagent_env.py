@@ -167,6 +167,10 @@ class MAWindFarmEnv(AECEnv):
 
         agent = self.agent_selection
 
+        if self.truncations[agent] or self.terminations[agent]:
+            self._was_dead_step(action)
+            return
+
         self._num_steps[agent] += 1
 
         # TODO: allow for different control for each agent
@@ -204,8 +208,6 @@ class MAWindFarmEnv(AECEnv):
 
         # collect reward when all agents have taken an action
         if self._agent_selector.is_last():
-            if any(self.truncations.values()) or all(self.terminations.values()):
-                self.agents = []
             next_state, powers, loads, truncated = self.mdp.take_action(
                 self._state, self._join_actions(self.actions)
             )
@@ -230,8 +232,6 @@ class MAWindFarmEnv(AECEnv):
                 self.terminations[agent] = False
                 self.infos[agent]["power"] = powers[self.agent_name_mapping[agent]]
 
-            if truncated:
-                self.agents = []
             self.num_moves += 1
         else:
             # no reward allocated until all players take an action

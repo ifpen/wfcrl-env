@@ -28,8 +28,11 @@ for agent in env.agent_iter():
     observation, reward, termination, truncation, info = env.last()
     done[agent] = done[agent] or termination or truncation
     r[agent] += reward
-    action = dummy_policy(agent, num_steps[agent])
-    num_steps[agent] += 1
+    if done[agent]:
+        action = None
+    else:
+        action = dummy_policy(agent, num_steps[agent])
+        num_steps[agent] += 1
     env.step(action)
 
 print(f"Total reward = {r}")
