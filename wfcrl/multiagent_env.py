@@ -13,7 +13,10 @@ from wfcrl.rewards import DoNothingReward, RewardShaper
 
 
 class MAWindFarmEnv(AECEnv):
-    metadata = {"name": "multiagent-windfarm"}
+    metadata = {
+        "name": "multiagent-windfarm",
+        "is_parallelizable": True,
+    }
 
     def __init__(
         self,

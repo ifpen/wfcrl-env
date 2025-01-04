@@ -299,7 +299,7 @@ class WindFarmMDP:
                 )
             else:
                 # 0, 1, 2 => DOWN, NO CHANGE, UP
-                command_joint_action *= (command_joint_action - 1) * self.controls[
+                command_joint_action = (command_joint_action - 1) * self.controls[
                     control
                 ][-1]
             next_state[control] = np.clip(
