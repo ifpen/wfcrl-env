@@ -656,7 +656,8 @@ class FlorisInterface(BaseInterface):
 
     def update_wind(self, wind_speed: float = None, wind_direction: float = None):
         wind_direction = wind_direction % 360
-        self.fi.reinitialize(
-            wind_speeds=[wind_speed] if wind_speed is not None else None,
-            wind_directions=[wind_direction] if wind_direction is not None else None,
-        )
+        if wind_speed != self.wind_speed or wind_direction != self.wind_dir:
+            self.fi.reinitialize(
+                wind_speeds=[wind_speed] if wind_speed is not None else None,
+                wind_directions=[wind_direction] if wind_direction is not None else None,
+            )
