@@ -22,6 +22,7 @@ class WindFarmEnv(gym.Env):
         reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
+        load_coef: float = 0.1
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
@@ -43,6 +44,7 @@ class WindFarmEnv(gym.Env):
         self.farm_case = farm_case
         self.accumulated_actions = self.mdp.get_accumulated_actions()
         self.num_moves = 0
+        self.load_coef = load_coef
 
     def reset(self, seed=None, options=None):
         self.mdp.reset(seed, options)
@@ -79,7 +81,7 @@ class WindFarmEnv(gym.Env):
         load_penalty = 0
         if loads is not None:
             load_penalty = np.mean(np.abs(loads))
-        reward = normalized_powers.mean() - 0.1 * load_penalty
+        reward = normalized_powers.mean() - self.load_coef * load_penalty
         reward = np.array([self.reward_shaper(reward)])
         self._state = next_state
         terminated = False

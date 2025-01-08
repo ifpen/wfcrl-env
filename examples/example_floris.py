@@ -7,6 +7,7 @@ env = envs.make(
     "Dec_Ablaincourt_Floris",
     max_num_steps=100,
     reward_shaper=StepPercentage(),
+    load_coef=1
 )
 
 

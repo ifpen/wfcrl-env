@@ -27,6 +27,7 @@ class MAWindFarmEnv(AECEnv):
         reward_shaper: RewardShaper = DoNothingReward(),
         start_iter: int = 0,
         max_num_steps: int = 500,
+        load_coef: float = 0.1
     ):
         self.mdp = WindFarmMDP(
             interface=interface,
@@ -44,6 +45,7 @@ class MAWindFarmEnv(AECEnv):
         self.controls = controls
         self.farm_case = farm_case
         self.state_space = self.mdp.state_space
+        self.load_coef = load_coef
 
         # Init AEC properties
         self.possible_agents = [
@@ -221,7 +223,7 @@ class MAWindFarmEnv(AECEnv):
             load_penalty = 0
             if loads is not None:
                 load_penalty = np.mean(np.abs(loads))
-            reward = normalized_powers.mean() - 0.1 * load_penalty
+            reward = normalized_powers.mean() - self.load_coef * load_penalty
             reward = np.array([self.reward_shaper(reward)])
             self._state = next_state
             for agent in self.agents:

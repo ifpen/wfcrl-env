@@ -8,6 +8,7 @@ env = envs.make(
     max_num_steps=100,
     controls=["yaw", "pitch"],
     reward_shaper=StepPercentage(),
+    load_coef=1
 )
 
 
@@ -24,6 +25,9 @@ env.reset()
 r = {agent: 0 for agent in env.possible_agents}
 done = {agent: False for agent in env.possible_agents}
 num_steps = {agent: 0 for agent in env.possible_agents}
+loads = {agent: 0 for agent in env.possible_agents}
+powers = {agent: 0 for agent in env.possible_agents}
+
 for agent in env.agent_iter():
     observation, reward, termination, truncation, info = env.last()
     done[agent] = done[agent] or termination or truncation
@@ -33,6 +37,10 @@ for agent in env.agent_iter():
     else:
         action = dummy_policy(agent, num_steps[agent])
         num_steps[agent] += 1
+        loads[agent] += float(np.mean(np.abs(info["load"]))) if "load" in info else 0
+        powers[agent] += float(info["power"]) if "power" in info else 0
     env.step(action)
 
-print(f"Total reward = {r}")
+print(f"\nTotal reward = {r}\n")
+print(f"Powers = {powers}\n")
+print(f"Loads = {loads}\n")
