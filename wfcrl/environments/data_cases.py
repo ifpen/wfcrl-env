@@ -107,7 +107,7 @@ fastfarm_3t = FastFarmCase(
     ycoords=[0.0, 0.0, 0.0],
     dt=3,
     buffer_window=1,
-    t_init=100,
+    t_init=25,
     set_wind_direction=True,
 )
 floris_3t = FlorisCase(
@@ -126,7 +126,7 @@ fastfarm_6t = FastFarmCase(
     ycoords=[-252, -252, -252, 252, 252, 252],
     dt=3,
     buffer_window=1,
-    t_init=100,
+    t_init=25,
     set_wind_direction=True,
 )
 floris_6t = FlorisCase(
