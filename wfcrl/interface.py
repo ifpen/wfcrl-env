@@ -260,7 +260,7 @@ class MPI_Interface(BaseInterface):
     def avg_powers(self, window: int = None) -> List:
         if window is None:
             window = self._default_avg_window
-        return self._power_buffers.get_agg(window).squeeze()
+        return np.atleast_1d(self._power_buffers.get_agg(window).squeeze())
 
     def avg_wind(self, window: int = None) -> List:
         if window is None:
@@ -268,15 +268,15 @@ class MPI_Interface(BaseInterface):
         return self._wind_buffers.get_agg(window).squeeze()
 
     def last_powers(self, window: int = 0) -> np.ndarray:
-        return self._power_buffers.get_all(window).squeeze()
+        return np.atleast_1d(self._power_buffers.get_all(window).squeeze())
 
     def last_wind(self, window: int = 0) -> np.ndarray:
         return self._wind_buffers.get_all(window).squeeze()
 
     def get_measure(self, measure: str) -> np.ndarray:
         if measure == "freewind_measurements":
-            return self.last_wind().squeeze()
-        return self.current_measures[:, self.measure_map[measure]].squeeze()
+            return np.atleast_1d(self.last_wind().squeeze())
+        return np.atleast_1d(self.current_measures[:, self.measure_map[measure]].squeeze())
 
     def get_all_measures(self) -> Dict:
         df = pd.DataFrame(self.current_measures, columns=self.measure_names)
