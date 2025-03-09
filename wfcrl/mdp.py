@@ -78,7 +78,13 @@ class WindFarmMDP:
                 del interface_kwargs[key]
             self.interface = interface(**interface_kwargs)
         else:
-            self.interface = interface.from_case(farm_case)
+            path_to_simulator = farm_case.interface_kwargs.get("path_to_simulator", None)
+            interface_args = (
+                [farm_case] 
+                if path_to_simulator is None 
+                else [farm_case, path_to_simulator]
+            )
+            self.interface = interface.from_case(*interface_args)
         self.num_turbines = farm_case.num_turbines
         self.continuous_control = continuous_control
         self.horizon = horizon

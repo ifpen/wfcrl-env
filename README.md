@@ -9,11 +9,11 @@ from wfcrl import environments as envs
 envs.list_envs()
 ```
 
-All wind farms environments are implemented with both the `Gymnasium` and `PettingZoo` API, and can be run on both the `Floris` and the `FastFarm` wind farm simulators.
+All wind farms environments are implemented with both the `Gymnasium` and `PettingZoo` API, and can be run on both the `Floris` and the `FAST.Farm` wind farm simulators.
 
 The root name of the environment is associated with a specific layout, of arrangement of turbines in the field. It is combined with a prefix and a suffix:
 - A `Dec_` prefix is added before environment names to indicate an Agent Environment Cycle implementation supported by `PettingZoo`.
-- A `Floris` or `Fastfarm` suffix is added after the name of the environment to indicate the name of the background simulator.
+- A `Floris` or `FAST.Farm` suffix is added after the name of the environment to indicate the name of the background simulator.
 
 
 | Root Name          | **\# Agents** | **Description**     |
@@ -75,7 +75,7 @@ This requires you to have *cmake* and an MPI implementation like *OpenMPI 3*.
 1. Download the compiled FAST.Farm 3.5.1.binaries [here](https://github.com/OpenFAST/openfast/releases/tag/v3.5.1).
 
 2. Download **BOTH** Windows MPI setup (.exe) and MPI SDK (.msi) and install them from (https://www.microsoft.com/en-us/download/details.aspx?id=100593)
-You can check your installation by enBtering : `set MSMPI` from `C:\Windows\System32` in the command prompt. You should obtain the following:
+You can check your installation by entering : `set MSMPI` from `C:\Windows\System32` in the command prompt. You should obtain the following:
 
 ```
 MSMPI_BENCHMARKS=C:\Program Files\Microsoft MPI\Benchmarks\
@@ -93,12 +93,12 @@ python examples/example_fastfarm.py
 
 On Windows, it is necessary to launch the example directly with `mpiexec`:
 ```
-mpiexec -n 1 python examples/example.py
+mpiexec -n 1 python examples/example_fastfarm.py
 ```
 
 ## More details on interfacing with FAST.Farm
 
-A simple tutorial to start a simulation with the FastFarm interface is available in the notebook `interface.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
+A simple tutorial to start a simulation with the FAST.Farm interface is available in the notebook `interface.ipynb` notebook. To properly launch the notebook, see the intructions below in *Running Examples Notebook*.
 
 **Creating an interface from a WFCRL case:**
 
