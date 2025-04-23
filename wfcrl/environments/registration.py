@@ -95,6 +95,9 @@ def make(env_id: str, controls: Union[dict, list] = ["yaw"], log=True, **env_kwa
     if "wind_time_series" in env_kwargs:
         case.wind_time_series = env_kwargs["wind_time_series"]
         del env_kwargs["wind_time_series"]
+    if "path_to_simulator" in env_kwargs:
+        case.path_to_simulator = env_kwargs["path_to_simulator"]
+        del env_kwargs["path_to_simulator"]
     env = env_class(
         interface=simulator_class,
         farm_case=case,

@@ -8,7 +8,9 @@ env = envs.make(
     max_num_steps=100,
     controls=["yaw", "pitch"],
     reward_shaper=StepPercentage(),
-    load_coef=1
+    load_coef=1,
+    # UNCOMMENT TO ADD CUSTOM PATH TO FAST.Farm
+    # path_to_simulator="path_to_simulator"
 )
 
 
