@@ -61,13 +61,14 @@ REAL(4), PARAMETER           :: PC_KI         =       0.008068634               
 REAL(4), PARAMETER           :: PC_KK         =       0.1099965                 ! Pitch angle where the the derivative of the aerodynamic power w.r.t. pitch has increased by a factor of two relative to the derivative at rated pitch (zero), rad.
 REAL(4), PARAMETER           :: PC_KP         =       0.01882681                ! Proportional gain for pitch controller at rated pitch (zero), sec.
 REAL(4), PARAMETER           :: PC_MaxPit     =       1.570796                  ! Maximum pitch setting in pitch controller, rad.
-REAL(4), PARAMETER           :: PC_MaxRat     =       0.1396263                 ! Maximum pitch  rate (in absolute value) in pitch  controller, rad/s.
+REAL(4), PARAMETER           :: PC_MaxRat     =       0.01745329                ! Maximum pitch  rate (in absolute value) in pitch  controller, rad/s.
 REAL(4)                      :: PC_MinPit     =       0.0                       ! Minimum pitch setting in pitch controller, rad.
 REAL(4), PARAMETER           :: PC_RefSpd     =     122.9096                    ! Desired (reference) HSS speed for pitch controller, rad/s.
 REAL(4), SAVE                :: PitCom    (3)                                   ! Commanded pitch of each blade the last time the controller was called, rad.
 REAL(4)                      :: PitComI                                         ! Integral term of command pitch, rad.
 REAL(4)                      :: PitComP                                         ! Proportional term of command pitch, rad.
 REAL(4)                      :: PitComT                                         ! Total command pitch based on the sum of the proportional and integral terms, rad.
+
 REAL(4)                      :: PitRate   (3)                                   ! Pitch rates of each blade based on the current pitch angles and current pitch command, rad/s.
 REAL(4), PARAMETER           :: R2D           =      57.295780                  ! Factor to convert radians to degrees.
 REAL(4), PARAMETER           :: RPS2RPM       =       9.5492966                 ! Factor to convert radians per second to revolutions per minute.
@@ -88,7 +89,8 @@ REAL(4), SAVE                :: VS_Slope25                                      
 REAL(4), PARAMETER           :: VS_SlPc       =      10.0                       ! Rated generator slip percentage in Region 2 1/2, %.
 REAL(4), SAVE                :: VS_SySp                                         ! Synchronous speed of region 2 1/2 induction generator, rad/s.
 REAL(4), SAVE                :: VS_TrGnSp                                       ! Transitional generator speed (HSS side) between regions 2 and 2 1/2, rad/s.
-
+REAL(4), PARAMETER           :: PitchFiltTau = 0.002                            ! Pitch command filter time constant, sec
+REAL(4), SAVE                :: LastFiltPitCom(3)                                ! Last filtered pitch command for each blade, rad
 INTEGER(4)                   :: I                                               ! Generic index.
 INTEGER(4)                   :: iStatus                                         ! A status flag set by the simulation as follows: 0 if this is the first call, 1 for all subsequent time steps, -1 if this is the final call at the end of the simulation.
 INTEGER(4)                   :: K                                               ! Loops through blades.
@@ -267,14 +269,14 @@ IF ( iStatus == 0 )  THEN  ! .TRUE. if we're on the first call to the DLL
       OPEN ( UnDb, FILE=TRIM( RootName )//'.dbg', STATUS='REPLACE' )
 
       WRITE (UnDb,'(/////)')
-      WRITE (UnDb,'(A)')  'Time '//Tab//'ElapTime'//Tab//'HorWindV'//Tab//'GenSpeed'//Tab//'GenSpeedF'//Tab//'RelSpdErr'//Tab// &
+      WRITE (UnDb,'(A)')  'Time'//Tab//'ElapTime'//Tab//'HorWindV'//Tab//'GenSpeed'//Tab//'GenSpeedF'//Tab//'RelSpdErr'//Tab// &
                           'SpdErr '//Tab//'IntSpdErr'//Tab//'GK '//Tab//'PitComP'//Tab//'PitComI'//Tab//'PitComT'//Tab//        &
                           'PitRate1'//Tab//'PitRate2'//Tab//'PitRate3'//Tab//'PitCom1'//Tab//'PitCom2'//Tab//'PitCom3'//Tab// &
-                          'BlPitch1'//Tab//'BlPitch2'//Tab//'BlPitch3'
+                          'BlPitch1'//Tab//'BlPitch2'//Tab//'BlPitch3'//Tab//'PitchRef'
       WRITE (UnDb,'(A)')  '(sec)'//Tab//'(sec)   '//Tab//'(m/sec) '//Tab//'(rpm)   '//Tab//'(rpm)    '//Tab//'(%)      '//Tab// &
                           '(rad/s)'//Tab//'(rad)    '//Tab//'(-)'//Tab//'(deg)  '//Tab//'(deg)  '//Tab//'(deg)  '//Tab//        &
                           '(deg/s) '//Tab//'(deg/s) '//Tab//'(deg/s) '//Tab//'(deg)  '//Tab//'(deg)  '//Tab//'(deg)  '//Tab// &
-                          '(deg)   '//Tab//'(deg)   '//Tab//'(deg)   '
+                          '(deg)   '//Tab//'(deg)   '//Tab//'(deg)   '//Tab//'(deg)   '
 
 
       OPEN ( UnDb2, FILE=TRIM( RootName )//'.dbg2', STATUS='REPLACE' )
@@ -343,6 +345,8 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
     !print *, "received YawRef: ", YawRef, " TorqueRef: ", TorqueRef, " PitchRef: ", PitchRef
     YawAngle = avrSWAP(37)
     !avrSWAP(24)    =  YawRef - avrSWAP(37) !yaw error
+    !PRINT *, "Pitch command before", PitchRef
+    LastFiltPitCom = PitCom   ! Initialize filtered pitch command with current pitch
 
     IF (YawExternalCommand) THEN
     !avrSWAP(48) = MIN( MAX( 1*avrSWAP(24), -from_SC_Glob(1) ), from_SC_Glob(1) ) !saturation at 0.3deg/s
@@ -474,6 +478,8 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    ElapTime = Time - LastTimePC
 
 
+
+
    ! Only perform the control calculations if the elapsed time is greater than
    !   or equal to the communication interval of the pitch controller:
    ! NOTE: Time is scaled by OnePlusEps to ensure that the contoller is called
@@ -482,64 +488,62 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
    IF ( ( Time*OnePlusEps - LastTimePC ) >= PC_DT )  THEN
 
-        IF (.not. PitchExternalCommand) THEN
-            ! Use native FAST.Farm pitch control
+         ! Compute the gain scheduling correction factor based on the previously
+         !   commanded pitch angle for blade 1:
+
+            GK = 1.0/( 1.0 + PitCom(1)/PC_KK )
 
 
-           ! Compute the gain scheduling correction factor based on the previously
-           !   commanded pitch angle for blade 1:
+         ! Compute the current speed error and its integral w.r.t. time; saturate the
+         !   integral term using the pitch angle limits:
 
-              GK = 1.0/( 1.0 + PitCom(1)/PC_KK )
-
-
-           ! Compute the current speed error and its integral w.r.t. time; saturate the
-           !   integral term using the pitch angle limits:
-
-              SpdErr    = GenSpeedF - PC_RefSpd                                 ! Current speed error
-              IntSpdErr = IntSpdErr + SpdErr*ElapTime                           ! Current integral of speed error w.r.t. time
-              IntSpdErr = MIN( MAX( IntSpdErr, PC_MinPit/( GK*PC_KI ) ), &
-                                               PC_MaxPit/( GK*PC_KI )      )    ! Saturate the integral term using the pitch angle limits, converted to integral speed error limits
+            SpdErr    = GenSpeedF - PC_RefSpd                                 ! Current speed error
+            IntSpdErr = IntSpdErr + SpdErr*ElapTime                           ! Current integral of speed error w.r.t. time
+            IntSpdErr = MIN( MAX( IntSpdErr, PC_MinPit/( GK*PC_KI ) ), &
+                                             PC_MaxPit/( GK*PC_KI )      )    ! Saturate the integral term using the pitch angle limits, converted to integral speed error limits
 
 
-           ! Compute the pitch commands associated with the proportional and integral
-           !   gains:
+         ! Compute the pitch commands associated with the proportional and integral
+         !   gains:
 
-              PitComP   = GK*PC_KP*   SpdErr                                    ! Proportional term
-              PitComI   = GK*PC_KI*IntSpdErr                                    ! Integral term (saturated)
-
-
-           ! Superimpose the individual commands to get the total pitch command;
-           !   saturate the overall command using the pitch angle limits:
-
-              PitComT   = PitComP + PitComI                                     ! Overall command (unsaturated)
-              PitComT   = MIN( MAX( PitComT, PC_MinPit ), PC_MaxPit )           ! Saturate the overall command using the pitch angle limits
+            PitComP   = GK*PC_KP*   SpdErr                                    ! Proportional term
+            PitComI   = GK*PC_KI*IntSpdErr                                    ! Integral term (saturated)
 
 
-           ! Saturate the overall commanded pitch using the pitch rate limit:
-           ! NOTE: Since the current pitch angle may be different for each blade
-           !       (depending on the type of actuator implemented in the structural
-           !       dynamics model), this pitch rate limit calculation and the
-           !       resulting overall pitch angle command may be different for each
-           !       blade.
+         ! Superimpose the individual commands to get the total pitch command;
+         !   saturate the overall command using the pitch angle limits:
+
+            PitComT   = PitComP + PitComI                                     ! Overall command (unsaturated)
+            PitComT   = MIN( MAX( PitComT, PC_MinPit ), PC_MaxPit )
+            
+            ! Saturate the overall command using the pitch angle limits
+  
+          IF (PitchExternalCommand) THEN !If supercontroller sends an external pitch command, the max between native pitch and external command is used
+                
+                PitchRef = MAX(PitchRef,PitComT)
+                
+                ! Apply exponential smoothing to pitch commands
+                
+                Alpha = EXP(-PC_DT / PitchFiltTau)  ! Filter coefficient
+                DO K = 1,NumBl
+                 LastFiltPitCom(K) = (1.0 - Alpha)*PitchRef + Alpha*LastFiltPitCom(K)
+                 PitCom(K) = LastFiltPitCom(K)
+
+                ENDDO
+
+            ENDIF
+       
+      LastTimePC = Time
+
+      ! Output debugging information if requested:
+      IF ( PC_DbgOut )  THEN
+         WRITE (UnDb,FmtDat)  Time, ElapTime, HorWindV, GenSpeed*RPS2RPM, GenSpeedF*RPS2RPM,           &
+                              100.0*SpdErr/PC_RefSpd, SpdErr, IntSpdErr, GK, PitComP*R2D, PitComI*R2D, &
+                              PitComT*R2D, PitRate*R2D, PitCom*R2D, BlPitch*R2D, PitchRef
+      END IF
+   ENDIF
 
 
-
-          DO K = 1,NumBl ! Loop through all blades
-
-             PitRate(K) = ( PitComT - BlPitch(K) )/ElapTime                 ! Pitch rate of blade K (unsaturated)
-             PitRate(K) = MIN( MAX( PitRate(K), -PC_MaxRat ), PC_MaxRat )   ! Saturate the pitch rate of blade K using its maximum absolute value
-             PitCom (K) = BlPitch(K) + PitRate(K)*ElapTime                  ! Saturate the overall command of blade K using the pitch rate limit
-
-             PitCom(K)  = MIN( MAX( PitCom(K), PC_MinPit ), PC_MaxPit )     ! Saturate the overall command using the pitch angle limits
-
-          ENDDO          ! K - all blades
-
-        ELSE
-       ! Use command from supercontroller
-            DO K = 1,NumBl ! Loop through all blades
-                PitCom(K) = PitchRef
-            ENDDO
-        ENDIF
 
    ! Reset the value of LastTimePC to the current value:
 
@@ -551,12 +555,11 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
       IF ( PC_DbgOut )  THEN
                         WRITE (UnDb,FmtDat)  Time, ElapTime, HorWindV, GenSpeed*RPS2RPM, GenSpeedF*RPS2RPM,           &
                                              100.0*SpdErr/PC_RefSpd, SpdErr, IntSpdErr, GK, PitComP*R2D, PitComI*R2D, &
-                                             PitComT*R2D, PitRate*R2D, PitCom*R2D, BlPitch*R2D
+                                             PitComT*R2D, PitRate*R2D, PitCom*R2D, BlPitch*R2D, PitchRef
 
       END IF
 
-   ENDIF
-
+   
 
    ! Set the pitch override to yes and command the pitch demanded from the last
    !   call to the controller (See Appendix A of Bladed User's Guide):
@@ -567,11 +570,12 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    avrSWAP(42) = PitCom(1) ! Use the command angles of all blades if using individual pitch
    avrSWAP(43) = PitCom(2) ! "
    avrSWAP(44) = PitCom(3) ! "
-
-   ! Get Command from supercontroller
+   
+   !! Get Command from supercontroller
    avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
+   
 
-      IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
+    IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
 
 !=======================================================================
 
