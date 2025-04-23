@@ -68,8 +68,7 @@ REAL(4), SAVE                :: PitCom    (3)                                   
 REAL(4)                      :: PitComI                                         ! Integral term of command pitch, rad.
 REAL(4)                      :: PitComP                                         ! Proportional term of command pitch, rad.
 REAL(4)                      :: PitComT                                         ! Total command pitch based on the sum of the proportional and integral terms, rad.
-REAL(4)                      :: PitRateTemp                                     ! Pitch rate value used for calculation only
-REAL(4)                      :: PitchTemp                                       ! Pitch value used for calculation only
+
 REAL(4)                      :: PitRate   (3)                                   ! Pitch rates of each blade based on the current pitch angles and current pitch command, rad/s.
 REAL(4), PARAMETER           :: R2D           =      57.295780                  ! Factor to convert radians to degrees.
 REAL(4), PARAMETER           :: RPS2RPM       =       9.5492966                 ! Factor to convert radians per second to revolutions per minute.
@@ -570,16 +569,17 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    avrSWAP(42) = PitCom(1) ! Use the command angles of all blades if using individual pitch
    avrSWAP(43) = PitCom(2) ! "
    avrSWAP(44) = PitCom(3) ! "
-
-   ! Get Command from supercontroller
-   avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
    
-    avrSWAP( 4) = PitCom(1)
-    avrSWAP(33) = PitCom(1)
-    avrSWAP(34) = PitCom(1)
-    avrSWAP(42) = PitCom(1)
-   avrSWAP(43) =PitCom(1)
-   avrSWAP(44) = PitCom(1)
+   !! Get Command from supercontroller
+   avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
+   !
+   ! avrSWAP( 4) = PitCom(1)
+   ! avrSWAP(33) = PitCom(1)
+   ! avrSWAP(34) = PitCom(1)
+   ! avrSWAP(42) = PitCom(1)
+   !avrSWAP(43) =PitCom(1)
+   !avrSWAP(44) = PitCom(1)
+
       IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
 
 !=======================================================================
