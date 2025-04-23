@@ -89,8 +89,8 @@ REAL(4), SAVE                :: VS_Slope25                                      
 REAL(4), PARAMETER           :: VS_SlPc       =      10.0                       ! Rated generator slip percentage in Region 2 1/2, %.
 REAL(4), SAVE                :: VS_SySp                                         ! Synchronous speed of region 2 1/2 induction generator, rad/s.
 REAL(4), SAVE                :: VS_TrGnSp                                       ! Transitional generator speed (HSS side) between regions 2 and 2 1/2, rad/s.
-REAL(4), PARAMETER           :: PitchFiltTau = 0.002      ! Pitch command filter time constant, sec
-REAL(4), SAVE                :: LastFiltPitCom(3)       ! Last filtered pitch command for each blade, rad
+REAL(4), PARAMETER           :: PitchFiltTau = 0.002                            ! Pitch command filter time constant, sec
+REAL(4), SAVE                :: LastFiltPitCom(3)                                ! Last filtered pitch command for each blade, rad
 INTEGER(4)                   :: I                                               ! Generic index.
 INTEGER(4)                   :: iStatus                                         ! A status flag set by the simulation as follows: 0 if this is the first call, 1 for all subsequent time steps, -1 if this is the final call at the end of the simulation.
 INTEGER(4)                   :: K                                               ! Loops through blades.
@@ -488,8 +488,6 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
 
    IF ( ( Time*OnePlusEps - LastTimePC ) >= PC_DT )  THEN
 
-         ! Use native FAST.Farm pitch control
-
          ! Compute the gain scheduling correction factor based on the previously
          !   commanded pitch angle for blade 1:
 
@@ -520,9 +518,12 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
             
             ! Saturate the overall command using the pitch angle limits
   
-          IF (PitchExternalCommand) THEN !Use max between native pitch and external command
-                ! Apply recursive filter to pitch commands
+          IF (PitchExternalCommand) THEN !If supercontroller sends an external pitch command, the max between native pitch and external command is used
+                
                 PitchRef = MAX(PitchRef,PitComT)
+                
+                ! Apply exponential smoothing to pitch commands
+                
                 Alpha = EXP(-PC_DT / PitchFiltTau)  ! Filter coefficient
                 DO K = 1,NumBl
                  LastFiltPitCom(K) = (1.0 - Alpha)*PitchRef + Alpha*LastFiltPitCom(K)
@@ -572,15 +573,9 @@ IF ( ( iStatus >= 0 ) .AND. ( aviFAIL >= 0 ) )  THEN  ! Only compute control cal
    
    !! Get Command from supercontroller
    avrSWAP(45) = PitCom(1) ! Use the command angle of blade 1 if using collective pitch
-   !
-   ! avrSWAP( 4) = PitCom(1)
-   ! avrSWAP(33) = PitCom(1)
-   ! avrSWAP(34) = PitCom(1)
-   ! avrSWAP(42) = PitCom(1)
-   !avrSWAP(43) =PitCom(1)
-   !avrSWAP(44) = PitCom(1)
+   
 
-      IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
+    IF ( PC_DbgOut )  WRITE (UnDb2,FmtDat) Time, avrSWAP(1:85)
 
 !=======================================================================
 
