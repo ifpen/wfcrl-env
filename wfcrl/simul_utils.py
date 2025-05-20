@@ -265,3 +265,11 @@ def create_ff_case(case: Dict, output_dir=None):
     out_fstf["WrDisDT"] = out_fstf["DT_Low"]
     out_fstf.write(outputFSTF)
     return outputFSTF
+
+
+def reset_simul_file(simul_file, it):
+    new_path = path = Path(simul_file)
+    if it > 0:
+        new_path = path.with_stem(f"{path.stem}_iter{it}")
+        shutil.copy2(path, new_path)
+    return str(new_path)
