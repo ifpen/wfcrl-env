@@ -431,10 +431,10 @@ class FastFarmInterface(MPI_Interface):
             if simul_wind_speed != wind_speed:
                 write_inflow_info(self._inflow_file, float(wind_speed))
 
-        self._simul_file = reset_simul_file(self._simul_file, self._num_resets)
-        print("Spawning process", self._path_to_fastfarm_exe, self._simul_file)
+        simul_file = reset_simul_file(self._simul_file, self._num_resets)
+        print("Spawning process", self._path_to_fastfarm_exe, simul_file)
         spawn_comm = MPI.COMM_SELF.Spawn(
-            self._path_to_fastfarm_exe, args=[self._simul_file], maxprocs=1
+            self._path_to_fastfarm_exe, args=[simul_file], maxprocs=1
         )
         self.set_comm(spawn_comm)
         self._num_resets += 1
