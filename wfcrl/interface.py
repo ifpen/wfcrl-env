@@ -17,6 +17,7 @@ from wfcrl.simul_utils import (
     get_inflow_file_path,
     read_inflow_info,
     read_simul_info,
+    reset_simul_file,
     write_inflow_info,
 )
 
@@ -276,7 +277,9 @@ class MPI_Interface(BaseInterface):
     def get_measure(self, measure: str) -> np.ndarray:
         if measure == "freewind_measurements":
             return np.atleast_1d(self.last_wind().squeeze())
-        return np.atleast_1d(self.current_measures[:, self.measure_map[measure]].squeeze())
+        return np.atleast_1d(
+            self.current_measures[:, self.measure_map[measure]].squeeze()
+        )
 
     def get_all_measures(self) -> Dict:
         df = pd.DataFrame(self.current_measures, columns=self.measure_names)
@@ -349,6 +352,7 @@ class FastFarmInterface(MPI_Interface):
         self._path_to_fastfarm_exe = fast_farm_executable
         self._simul_file = fstf_file
         self._inflow_file = get_inflow_file_path(fstf_file)
+        self._num_resets = 0
 
         super().__init__(
             default_avg_window=default_avg_window,
@@ -427,11 +431,13 @@ class FastFarmInterface(MPI_Interface):
             if simul_wind_speed != wind_speed:
                 write_inflow_info(self._inflow_file, float(wind_speed))
 
-        print("Spawning process", self._path_to_fastfarm_exe, self._simul_file)
+        simul_file = reset_simul_file(self._simul_file, self._num_resets)
+        print("Spawning process", self._path_to_fastfarm_exe, simul_file)
         spawn_comm = MPI.COMM_SELF.Spawn(
-            self._path_to_fastfarm_exe, args=[self._simul_file], maxprocs=1
+            self._path_to_fastfarm_exe, args=[simul_file], maxprocs=1
         )
         self.set_comm(spawn_comm)
+        self._num_resets += 1
         super().init()
 
 
@@ -659,5 +665,7 @@ class FlorisInterface(BaseInterface):
         if wind_speed != self.wind_speed or wind_direction != self.wind_dir:
             self.fi.reinitialize(
                 wind_speeds=[wind_speed] if wind_speed is not None else None,
-                wind_directions=[wind_direction] if wind_direction is not None else None,
+                wind_directions=[wind_direction]
+                if wind_direction is not None
+                else None,
             )
